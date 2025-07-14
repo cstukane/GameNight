@@ -1,0 +1,9 @@
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "D"]
+ignore = ["D100", "D104", "D105", "D107", "D203", "D212", "D213"]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]

@@ -1,0 +1,21 @@
+# Environments
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+env/
+venv/
+
+# Logs
+*.log
+*.txt
+
+# Testing
+tests/
+.pytest_cache/
+
+# Ruff cache
+.ruff_cache/

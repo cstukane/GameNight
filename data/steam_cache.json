@@ -1,0 +1,19 @@
+{
+    "users": [
+        {
+            "id": 1,
+            "username": "Player1",
+            "games": ["Game A", "Game B", "Game C"]
+        },
+        {
+            "id": 2,
+            "username": "Player2",
+            "games": ["Game B", "Game C", "Game D"]
+        },
+        {
+            "id": 3,
+            "username": "Player3",
+            "games": ["Game A", "Game B", "Game E"]
+        }
+    ]
+}

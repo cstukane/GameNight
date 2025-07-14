@@ -1,0 +1,4 @@
+2025-07-14 00:45:02,318 [INFO] Running job "send_game_night_reminders (trigger: interval[0:01:00], next run at: 2025-07-14 00:46:02 EDT)" (scheduled at 2025-07-14 00:45:02.305744-04:00)
+2025-07-14 00:45:02,319 [INFO] Job "send_game_night_reminders (trigger: interval[0:01:00], next run at: 2025-07-14 00:46:02 EDT)" executed successfully
+2025-07-14 00:46:02,317 [INFO] Running job "send_game_night_reminders (trigger: interval[0:01:00], next run at: 2025-07-14 00:47:02 EDT)" (scheduled at 2025-07-14 00:46:02.305744-04:00)
+2025-07-14 00:46:02,318 [INFO] Job "send_game_night_reminders (trigger: interval[0:01:00], next run at: 2025-07-14 00:47:02 EDT)" executed successfully

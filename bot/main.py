@@ -43,7 +43,6 @@ class GameNightBot(commands.Bot):
         # Load automation_tasks last to ensure all other cogs are ready
         await self.load_extension('bot.cogs.automation_tasks')
         logger.info("Loaded cog: automation_tasks")
-        logger.info(f"Loaded cog: {filename[:-3]}")
 
         # This syncs the command tree to the guild.
         # Commands will appear instantly in this guild.
@@ -55,8 +54,6 @@ class GameNightBot(commands.Bot):
         logger.info(f'Logged in as {self.user} (ID: {self.user.id})')
         logger.info(f'Commands synced to guild {MY_GUILD.id}')
         logger.info('------')
-        self.scheduler.start()
-        logger.info("Scheduler started.")
 
         # Schedule recurring tasks
         self.scheduler.add_job(
@@ -67,10 +64,7 @@ class GameNightBot(commands.Bot):
 #             fetch_game_pass_games, 'interval',
 #             weeks=4, next_run_time=datetime.now()
 #         )
-        self.scheduler.add_job(
-            reminders.send_game_night_reminders, 'interval',
-            minutes=1, args=[self]
-        )
+        
         # Schedule weekly availability poll on Mondays at a specific time (e.g., 9 AM)
         self.scheduler.add_job(
             self.get_cog('AutomationTasks').start_weekly_availability_poll, 'cron',

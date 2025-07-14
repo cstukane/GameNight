@@ -316,19 +316,19 @@ class UtilityCommands(commands.Cog):
 
         await interaction.followup.send(embed=embed)
 
-    @app_commands.command(name="set_planning_channel", description="Sets the channel for game night planning polls.")
-    @app_commands.describe(channel="The channel to set as the planning channel.")
+    @app_commands.command(name="set_main_channel", description="Sets the main channel for polls and announcements.")
+    @app_commands.describe(channel="The channel to set as the main channel.")
     @app_commands.default_permissions(manage_guild=True)
-    async def set_planning_channel(self, interaction: discord.Interaction, channel: discord.TextChannel):
-        """Set the designated channel for game night planning polls."""
+    async def set_main_channel(self, interaction: discord.Interaction, channel: discord.TextChannel):
+        """Set the designated channel for main announcements and polls."""
         await interaction.response.defer(ephemeral=True)
 
         if not interaction.guild:
             await interaction.followup.send("This command can only be used in a server.", ephemeral=True)
             return
 
-        db_manager.set_guild_planning_channel(str(interaction.guild.id), str(channel.id))
-        await interaction.followup.send(f"Game night planning channel has been set to {channel.mention}.")
+        db_manager.set_guild_main_channel(str(interaction.guild.id), str(channel.id))
+        await interaction.followup.send(f"Main channel has been set to {channel.mention}.")
 
 
 async def setup(bot):

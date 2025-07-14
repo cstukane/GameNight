@@ -1,15 +1,7 @@
 from datetime import datetime
 
 from peewee import (
-    AutoField,
-    BooleanField,
-    CharField,
-    CompositeKey,
-    DateTimeField,
-    ForeignKeyField,
-    IntegerField,
-    Model,
-    SqliteDatabase,
+    AutoField, BooleanField, CharField, CompositeKey, DateTimeField, ForeignKeyField, IntegerField, Model, SqliteDatabase, TextField
 )
 
 from utils.config import DATABASE_FILE
@@ -180,8 +172,9 @@ class GuildConfig(BaseModel):
     """Stores guild-specific configurations."""
 
     guild_id = CharField(unique=True)
+    main_channel_id = CharField(null=True)
     planning_channel_id = CharField(null=True)
-    custom_availability_pattern = CharField(null=True)
+    custom_availability_pattern = TextField(null=True)
 
 
 def initialize_models():

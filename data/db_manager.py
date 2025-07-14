@@ -468,23 +468,23 @@ def update_game_night_selected_game(game_night_id, game_id):
         logger.error(f"Error updating game night selected game: {e}")
 
 
-def set_guild_planning_channel(guild_id, channel_id):
-    """Set the planning channel ID for a given guild."""
+def set_guild_main_channel(guild_id, channel_id):
+    """Set the main channel ID for a given guild."""
     try:
         config, _ = GuildConfig.get_or_create(guild_id=guild_id)
-        config.planning_channel_id = channel_id
+        config.main_channel_id = channel_id
         config.save()
     except Exception as e:
-        logger.error(f"Error setting guild planning channel: {e}")
+        logger.error(f"Error setting guild main channel: {e}")
 
 
-def get_guild_planning_channel(guild_id):
-    """Retrieve the planning channel ID for a given guild."""
+def get_guild_main_channel(guild_id):
+    """Retrieve the main channel ID for a given guild."""
     try:
         config = GuildConfig.get_or_none(guild_id=guild_id)
-        return config.planning_channel_id if config else None
+        return config.main_channel_id if config else None
     except Exception as e:
-        logger.error(f"Error getting guild planning channel: {e}")
+        logger.error(f"Error getting guild main channel: {e}")
         return None
 
 

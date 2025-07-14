@@ -134,6 +134,11 @@ class GameNightCommands(commands.Cog):
             raise UserNotFoundError("There was an error finding you in the database.")
 
         events.set_attendee_status(game_night_id, user_db_id, status)
+
+        # If the user is attending, schedule a reminder
+        if status == "attending":
+            events.schedule_reminder(self.bot, user_db_id, game_night_id)
+
         await interaction.followup.send(
             f"Your availability for Game Night ID {game_night_id} has been set to **{status}**."
         )

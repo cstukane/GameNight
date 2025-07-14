@@ -2,3 +2,161 @@
 2025-07-14 00:45:02,319 [INFO] Job "send_game_night_reminders (trigger: interval[0:01:00], next run at: 2025-07-14 00:46:02 EDT)" executed successfully
 2025-07-14 00:46:02,317 [INFO] Running job "send_game_night_reminders (trigger: interval[0:01:00], next run at: 2025-07-14 00:47:02 EDT)" (scheduled at 2025-07-14 00:46:02.305744-04:00)
 2025-07-14 00:46:02,318 [INFO] Job "send_game_night_reminders (trigger: interval[0:01:00], next run at: 2025-07-14 00:47:02 EDT)" executed successfully
+2025-07-14 08:11:55,294 [INFO] Database initialized using Peewee models.
+2025-07-14 08:11:55,295 [WARNING] PyNaCl is not installed, voice will NOT be supported
+2025-07-14 08:11:55,298 [INFO] logging in using static token
+2025-07-14 08:11:55,298 [WARNING] Privileged message content intent is missing, commands may not work as expected.
+2025-07-14 08:11:55,575 [INFO] Loaded cog: game_commands
+2025-07-14 08:11:55,579 [INFO] Loaded cog: game_night_commands
+2025-07-14 08:11:55,580 [INFO] Loaded cog: utility_commands
+2025-07-14 08:11:55,581 [INFO] Loaded cog: voice_activity
+2025-07-14 08:11:55,617 [INFO] Loaded cog: automation_tasks
+2025-07-14 08:11:55,617 [INFO] Loaded cog: __pycach
+2025-07-14 08:11:56,026 [INFO] Shard ID None has connected to Gateway (Session ID: 38007ac9fe563329c138b78cb6b8740b).
+2025-07-14 08:11:58,028 [INFO] Logged in as Game Night#3086 (ID: 1388686637797736669)
+2025-07-14 08:11:58,028 [INFO] Commands synced to guild 1045175103249449000
+2025-07-14 08:11:58,028 [INFO] ------
+2025-07-14 08:11:58,031 [INFO] Scheduler started
+2025-07-14 08:11:58,031 [INFO] Scheduler started.
+2025-07-14 08:11:58,032 [INFO] Added job "fetch_and_store_games_for_all_users" to job store "default"
+2025-07-14 08:11:58,032 [INFO] Added job "send_game_night_reminders" to job store "default"
+2025-07-14 08:11:58,036 [INFO] Added job "AutomationTasks.start_weekly_availability_poll" to job store "default"
+2025-07-14 08:11:58,036 [INFO] Running job "fetch_and_store_games_for_all_users (trigger: interval[7 days, 0:00:00], next run at: 2025-07-21 08:11:58 EDT)" (scheduled at 2025-07-14 08:11:58.031268-04:00)
+2025-07-14 08:11:58,037 [INFO] Job "fetch_and_store_games_for_all_users (trigger: interval[7 days, 0:00:00], next run at: 2025-07-21 08:11:58 EDT)" executed successfully
+2025-07-14 08:12:58,044 [INFO] Running job "send_game_night_reminders (trigger: interval[0:01:00], next run at: 2025-07-14 08:13:58 EDT)" (scheduled at 2025-07-14 08:12:58.032417-04:00)
+2025-07-14 08:12:58,045 [INFO] Job "send_game_night_reminders (trigger: interval[0:01:00], next run at: 2025-07-14 08:13:58 EDT)" executed successfully
+2025-07-14 08:13:58,037 [INFO] Running job "send_game_night_reminders (trigger: interval[0:01:00], next run at: 2025-07-14 08:14:58 EDT)" (scheduled at 2025-07-14 08:13:58.032417-04:00)
+2025-07-14 08:13:58,038 [INFO] Job "send_game_night_reminders (trigger: interval[0:01:00], next run at: 2025-07-14 08:14:58 EDT)" executed successfully
+2025-07-14 08:14:58,033 [INFO] Running job "send_game_night_reminders (trigger: interval[0:01:00], next run at: 2025-07-14 08:15:58 EDT)" (scheduled at 2025-07-14 08:14:58.032417-04:00)
+2025-07-14 08:14:58,034 [INFO] Job "send_game_night_reminders (trigger: interval[0:01:00], next run at: 2025-07-14 08:15:58 EDT)" executed successfully
+2025-07-14 08:15:58,039 [INFO] Running job "send_game_night_reminders (trigger: interval[0:01:00], next run at: 2025-07-14 08:16:58 EDT)" (scheduled at 2025-07-14 08:15:58.032417-04:00)
+2025-07-14 08:15:58,040 [INFO] Job "send_game_night_reminders (trigger: interval[0:01:00], next run at: 2025-07-14 08:16:58 EDT)" executed successfully
+2025-07-14 08:16:58,035 [INFO] Running job "send_game_night_reminders (trigger: interval[0:01:00], next run at: 2025-07-14 08:17:58 EDT)" (scheduled at 2025-07-14 08:16:58.032417-04:00)
+2025-07-14 08:16:58,036 [INFO] Job "send_game_night_reminders (trigger: interval[0:01:00], next run at: 2025-07-14 08:17:58 EDT)" executed successfully
+2025-07-14 08:17:58,033 [INFO] Running job "send_game_night_reminders (trigger: interval[0:01:00], next run at: 2025-07-14 08:18:58 EDT)" (scheduled at 2025-07-14 08:17:58.032417-04:00)
+2025-07-14 08:17:58,033 [INFO] Job "send_game_night_reminders (trigger: interval[0:01:00], next run at: 2025-07-14 08:18:58 EDT)" executed successfully
+2025-07-14 08:18:58,049 [INFO] Running job "send_game_night_reminders (trigger: interval[0:01:00], next run at: 2025-07-14 08:19:58 EDT)" (scheduled at 2025-07-14 08:18:58.032417-04:00)
+2025-07-14 08:18:58,050 [INFO] Job "send_game_night_reminders (trigger: interval[0:01:00], next run at: 2025-07-14 08:19:58 EDT)" executed successfully
+2025-07-14 08:19:58,044 [INFO] Running job "send_game_night_reminders (trigger: interval[0:01:00], next run at: 2025-07-14 08:20:58 EDT)" (scheduled at 2025-07-14 08:19:58.032417-04:00)
+2025-07-14 08:19:58,045 [INFO] Job "send_game_night_reminders (trigger: interval[0:01:00], next run at: 2025-07-14 08:20:58 EDT)" executed successfully
+2025-07-14 08:20:58,043 [INFO] Running job "send_game_night_reminders (trigger: interval[0:01:00], next run at: 2025-07-14 08:21:58 EDT)" (scheduled at 2025-07-14 08:20:58.032417-04:00)
+2025-07-14 08:20:58,044 [INFO] Job "send_game_night_reminders (trigger: interval[0:01:00], next run at: 2025-07-14 08:21:58 EDT)" executed successfully
+2025-07-14 08:21:58,048 [INFO] Running job "send_game_night_reminders (trigger: interval[0:01:00], next run at: 2025-07-14 08:22:58 EDT)" (scheduled at 2025-07-14 08:21:58.032417-04:00)
+2025-07-14 08:21:58,049 [INFO] Job "send_game_night_reminders (trigger: interval[0:01:00], next run at: 2025-07-14 08:22:58 EDT)" executed successfully
+2025-07-14 08:22:58,043 [INFO] Running job "send_game_night_reminders (trigger: interval[0:01:00], next run at: 2025-07-14 08:23:58 EDT)" (scheduled at 2025-07-14 08:22:58.032417-04:00)
+2025-07-14 08:22:58,044 [INFO] Job "send_game_night_reminders (trigger: interval[0:01:00], next run at: 2025-07-14 08:23:58 EDT)" executed successfully
+2025-07-14 08:23:58,034 [INFO] Running job "send_game_night_reminders (trigger: interval[0:01:00], next run at: 2025-07-14 08:24:58 EDT)" (scheduled at 2025-07-14 08:23:58.032417-04:00)
+2025-07-14 08:23:58,035 [INFO] Job "send_game_night_reminders (trigger: interval[0:01:00], next run at: 2025-07-14 08:24:58 EDT)" executed successfully
+2025-07-14 08:24:58,034 [INFO] Running job "send_game_night_reminders (trigger: interval[0:01:00], next run at: 2025-07-14 08:25:58 EDT)" (scheduled at 2025-07-14 08:24:58.032417-04:00)
+2025-07-14 08:24:58,034 [INFO] Job "send_game_night_reminders (trigger: interval[0:01:00], next run at: 2025-07-14 08:25:58 EDT)" executed successfully
+2025-07-14 08:25:58,047 [INFO] Running job "send_game_night_reminders (trigger: interval[0:01:00], next run at: 2025-07-14 08:26:58 EDT)" (scheduled at 2025-07-14 08:25:58.032417-04:00)
+2025-07-14 08:25:58,048 [INFO] Job "send_game_night_reminders (trigger: interval[0:01:00], next run at: 2025-07-14 08:26:58 EDT)" executed successfully
+2025-07-14 08:26:58,045 [INFO] Running job "send_game_night_reminders (trigger: interval[0:01:00], next run at: 2025-07-14 08:27:58 EDT)" (scheduled at 2025-07-14 08:26:58.032417-04:00)
+2025-07-14 08:26:58,045 [INFO] Job "send_game_night_reminders (trigger: interval[0:01:00], next run at: 2025-07-14 08:27:58 EDT)" executed successfully
+2025-07-14 08:27:58,043 [INFO] Running job "send_game_night_reminders (trigger: interval[0:01:00], next run at: 2025-07-14 08:28:58 EDT)" (scheduled at 2025-07-14 08:27:58.032417-04:00)
+2025-07-14 08:27:58,044 [INFO] Job "send_game_night_reminders (trigger: interval[0:01:00], next run at: 2025-07-14 08:28:58 EDT)" executed successfully
+2025-07-14 08:28:58,035 [INFO] Running job "send_game_night_reminders (trigger: interval[0:01:00], next run at: 2025-07-14 08:29:58 EDT)" (scheduled at 2025-07-14 08:28:58.032417-04:00)
+2025-07-14 08:28:58,036 [INFO] Job "send_game_night_reminders (trigger: interval[0:01:00], next run at: 2025-07-14 08:29:58 EDT)" executed successfully
+2025-07-14 08:29:58,047 [INFO] Running job "send_game_night_reminders (trigger: interval[0:01:00], next run at: 2025-07-14 08:30:58 EDT)" (scheduled at 2025-07-14 08:29:58.032417-04:00)
+2025-07-14 08:29:58,048 [INFO] Job "send_game_night_reminders (trigger: interval[0:01:00], next run at: 2025-07-14 08:30:58 EDT)" executed successfully
+2025-07-14 08:30:58,045 [INFO] Running job "send_game_night_reminders (trigger: interval[0:01:00], next run at: 2025-07-14 08:31:58 EDT)" (scheduled at 2025-07-14 08:30:58.032417-04:00)
+2025-07-14 08:30:58,046 [INFO] Job "send_game_night_reminders (trigger: interval[0:01:00], next run at: 2025-07-14 08:31:58 EDT)" executed successfully
+2025-07-14 08:31:58,035 [INFO] Running job "send_game_night_reminders (trigger: interval[0:01:00], next run at: 2025-07-14 08:32:58 EDT)" (scheduled at 2025-07-14 08:31:58.032417-04:00)
+2025-07-14 08:31:58,036 [INFO] Job "send_game_night_reminders (trigger: interval[0:01:00], next run at: 2025-07-14 08:32:58 EDT)" executed successfully
+2025-07-14 08:32:58,046 [INFO] Running job "send_game_night_reminders (trigger: interval[0:01:00], next run at: 2025-07-14 08:33:58 EDT)" (scheduled at 2025-07-14 08:32:58.032417-04:00)
+2025-07-14 08:32:58,046 [INFO] Job "send_game_night_reminders (trigger: interval[0:01:00], next run at: 2025-07-14 08:33:58 EDT)" executed successfully
+2025-07-14 08:33:58,038 [INFO] Running job "send_game_night_reminders (trigger: interval[0:01:00], next run at: 2025-07-14 08:34:58 EDT)" (scheduled at 2025-07-14 08:33:58.032417-04:00)
+2025-07-14 08:33:58,039 [INFO] Job "send_game_night_reminders (trigger: interval[0:01:00], next run at: 2025-07-14 08:34:58 EDT)" executed successfully
+2025-07-14 08:34:58,042 [INFO] Running job "send_game_night_reminders (trigger: interval[0:01:00], next run at: 2025-07-14 08:35:58 EDT)" (scheduled at 2025-07-14 08:34:58.032417-04:00)
+2025-07-14 08:34:58,043 [INFO] Job "send_game_night_reminders (trigger: interval[0:01:00], next run at: 2025-07-14 08:35:58 EDT)" executed successfully
+2025-07-14 08:35:55,315 [INFO] Database initialized using Peewee models.
+2025-07-14 08:35:55,325 [INFO] logging in using static token
+2025-07-14 08:35:55,325 [WARNING] Privileged message content intent is missing, commands may not work as expected.
+2025-07-14 08:35:55,849 [INFO] Loaded cog: game_commands
+2025-07-14 08:35:55,853 [INFO] Loaded cog: game_night_commands
+2025-07-14 08:35:55,855 [INFO] Loaded cog: utility_commands
+2025-07-14 08:35:55,856 [INFO] Loaded cog: voice_activity
+2025-07-14 08:35:55,892 [INFO] Loaded cog: automation_tasks
+2025-07-14 08:35:55,892 [INFO] Loaded cog: __pycach
+2025-07-14 08:35:56,497 [INFO] Shard ID None has connected to Gateway (Session ID: 758eda9c53958bb87227caab7219dc32).
+2025-07-14 08:35:58,507 [INFO] Logged in as Game Night#3086 (ID: 1388686637797736669)
+2025-07-14 08:35:58,507 [INFO] Commands synced to guild 1045175103249449000
+2025-07-14 08:35:58,507 [INFO] ------
+2025-07-14 08:35:58,509 [INFO] Scheduler started
+2025-07-14 08:35:58,509 [INFO] Scheduler started.
+2025-07-14 08:35:58,510 [INFO] Added job "fetch_and_store_games_for_all_users" to job store "default"
+2025-07-14 08:35:58,513 [INFO] Added job "send_game_night_reminders" to job store "default"
+2025-07-14 08:35:58,514 [INFO] Added job "AutomationTasks.start_weekly_availability_poll" to job store "default"
+2025-07-14 08:35:58,514 [INFO] Running job "fetch_and_store_games_for_all_users (trigger: interval[7 days, 0:00:00], next run at: 2025-07-21 08:35:58 EDT)" (scheduled at 2025-07-14 08:35:58.510021-04:00)
+2025-07-14 08:35:58,515 [INFO] Job "fetch_and_store_games_for_all_users (trigger: interval[7 days, 0:00:00], next run at: 2025-07-21 08:35:58 EDT)" executed successfully
+2025-07-14 08:38:51,086 [INFO] Database initialized using Peewee models.
+2025-07-14 08:38:51,090 [INFO] logging in using static token
+2025-07-14 08:38:51,090 [WARNING] Privileged message content intent is missing, commands may not work as expected.
+2025-07-14 08:38:51,531 [INFO] Loaded cog: game_commands
+2025-07-14 08:38:51,549 [INFO] Loaded cog: game_night_commands
+2025-07-14 08:38:51,551 [INFO] Loaded cog: utility_commands
+2025-07-14 08:38:51,551 [INFO] Loaded cog: voice_activity
+2025-07-14 08:38:51,576 [INFO] Loaded cog: automation_tasks
+2025-07-14 08:38:51,576 [INFO] Loaded cog: __pycach
+2025-07-14 08:38:51,955 [INFO] Shard ID None has connected to Gateway (Session ID: c8a67d3873e5a036aa1cff40a9af071a).
+2025-07-14 08:38:53,964 [INFO] Logged in as Game Night#3086 (ID: 1388686637797736669)
+2025-07-14 08:38:53,964 [INFO] Commands synced to guild 1045175103249449000
+2025-07-14 08:38:53,964 [INFO] ------
+2025-07-14 08:38:53,966 [INFO] Scheduler started
+2025-07-14 08:38:53,966 [INFO] Scheduler started.
+2025-07-14 08:38:53,967 [INFO] Added job "fetch_and_store_games_for_all_users" to job store "default"
+2025-07-14 08:38:53,970 [INFO] Added job "AutomationTasks.start_weekly_availability_poll" to job store "default"
+2025-07-14 08:38:53,970 [INFO] Running job "fetch_and_store_games_for_all_users (trigger: interval[7 days, 0:00:00], next run at: 2025-07-21 08:38:53 EDT)" (scheduled at 2025-07-14 08:38:53.966590-04:00)
+2025-07-14 08:38:53,971 [INFO] Job "fetch_and_store_games_for_all_users (trigger: interval[7 days, 0:00:00], next run at: 2025-07-21 08:38:53 EDT)" executed successfully
+2025-07-14 09:00:00,009 [INFO] Running job "AutomationTasks.start_weekly_availability_poll (trigger: cron[day_of_week='mon', hour='9', minute='0'], next run at: 2025-07-21 09:00:00 EDT)" (scheduled at 2025-07-14 09:00:00-04:00)
+2025-07-14 09:00:00,011 [INFO] Starting weekly availability poll...
+2025-07-14 09:00:00,014 [ERROR] Error getting guild custom availability: no such column: t1.custom_availability_pattern
+2025-07-14 09:00:00,017 [INFO] No suitable game night slots found.
+2025-07-14 09:00:00,017 [INFO] Job "AutomationTasks.start_weekly_availability_poll (trigger: cron[day_of_week='mon', hour='9', minute='0'], next run at: 2025-07-21 09:00:00 EDT)" executed successfully
+2025-07-14 10:55:34,740 [INFO] Shard ID None has successfully RESUMED session c8a67d3873e5a036aa1cff40a9af071a.
+2025-07-14 11:49:36,582 [INFO] Shard ID None has successfully RESUMED session c8a67d3873e5a036aa1cff40a9af071a.
+2025-07-14 15:46:41,754 [INFO] Shard ID None has successfully RESUMED session c8a67d3873e5a036aa1cff40a9af071a.
+2025-07-14 17:54:41,512 [INFO] Shard ID None has successfully RESUMED session c8a67d3873e5a036aa1cff40a9af071a.
+2025-07-14 18:58:35,249 [INFO] Shard ID None session has been invalidated.
+2025-07-14 18:58:40,601 [INFO] Shard ID None has connected to Gateway (Session ID: 1d29b8cab516fb0fe1bdf24f230bb850).
+2025-07-14 18:58:42,635 [INFO] Logged in as Game Night#3086 (ID: 1388686637797736669)
+2025-07-14 18:58:42,635 [INFO] Commands synced to guild 1045175103249449000
+2025-07-14 18:58:42,636 [INFO] ------
+2025-07-14 18:58:42,636 [ERROR] Ignoring exception in on_ready
+Traceback (most recent call last):
+  File "C:\Users\ColeS\AppData\Local\Programs\Python\Python313\Lib\site-packages\discord\client.py", line 441, in _run_event
+    await coro(*args, **kwargs)
+  File "C:\Users\ColeS\Documents\Python Scripts\Game Night\bot\main.py", line 58, in on_ready
+    self.scheduler.start()
+    ~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\ColeS\AppData\Local\Programs\Python\Python313\Lib\site-packages\apscheduler\schedulers\asyncio.py", line 37, in start
+    super(AsyncIOScheduler, self).start(paused)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "C:\Users\ColeS\AppData\Local\Programs\Python\Python313\Lib\site-packages\apscheduler\schedulers\base.py", line 153, in start
+    raise SchedulerAlreadyRunningError
+apscheduler.schedulers.SchedulerAlreadyRunningError: Scheduler is already running
+2025-07-14 18:59:12,485 [INFO] Shard ID None has successfully RESUMED session 1d29b8cab516fb0fe1bdf24f230bb850.
+2025-07-14 19:06:56,967 [INFO] Added 'custom_availability_pattern' to the 'guildconfig' table.
+2025-07-14 19:06:56,972 [INFO] Database initialized using Peewee models.
+2025-07-14 19:06:56,982 [INFO] logging in using static token
+2025-07-14 19:06:56,982 [WARNING] Privileged message content intent is missing, commands may not work as expected.
+2025-07-14 19:06:57,376 [INFO] Loaded cog: game_commands
+2025-07-14 19:06:57,379 [INFO] Loaded cog: game_night_commands
+2025-07-14 19:06:57,398 [INFO] Loaded cog: utility_commands
+2025-07-14 19:06:57,399 [INFO] Loaded cog: voice_activity
+2025-07-14 19:06:57,462 [INFO] Loaded cog: automation_tasks
+2025-07-14 19:06:57,796 [INFO] Shard ID None has connected to Gateway (Session ID: 4c98cb7e71e210cbc4cb2743210e8707).
+2025-07-14 19:06:59,815 [INFO] Logged in as Game Night#3086 (ID: 1388686637797736669)
+2025-07-14 19:06:59,816 [INFO] Commands synced to guild 1045175103249449000
+2025-07-14 19:06:59,816 [INFO] ------
+2025-07-14 19:06:59,817 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-07-14 19:06:59,821 [INFO] Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-07-14 19:08:15,572 [INFO] Database initialized using Peewee models.
+2025-07-14 19:08:15,575 [INFO] logging in using static token
+2025-07-14 19:08:15,575 [WARNING] Privileged message content intent is missing, commands may not work as expected.
+2025-07-14 19:08:15,886 [INFO] Loaded cog: game_commands
+2025-07-14 19:08:15,889 [INFO] Loaded cog: game_night_commands
+2025-07-14 19:08:15,890 [INFO] Loaded cog: utility_commands
+2025-07-14 19:08:15,891 [INFO] Loaded cog: voice_activity
+2025-07-14 19:08:15,914 [INFO] Loaded cog: automation_tasks
+2025-07-14 19:08:16,233 [INFO] Shard ID None has connected to Gateway (Session ID: 05ca4c1c8d1d135eb7be76eec0b3a90b).

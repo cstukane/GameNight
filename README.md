@@ -76,6 +76,7 @@ Once the bot is running and added to your Discord server, you can use the follow
 -   `/discord_wrapped [year]`: Shows your voice activity statistics.
 -   `/game_night_history [user]`: Shows a user's past game night attendance.
 -   `/set_planning_channel <channel>`: Sets the channel for game night planning polls.
+-   `/set_main_channel <channel>`: Sets the main channel for polls and announcements.
 -   `/configure_weekly_slots`: Configure the guild's weekly availability time slots for polls.
 
 ## Project Structure

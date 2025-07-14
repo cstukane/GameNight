@@ -176,3 +176,28 @@ async def send_game_night_reminder(bot, user_discord_id, game_night_id, game_nam
         await user.send(embed=embed, view=view)
     else:
         await user.send(embed=embed)
+
+
+def schedule_reminder(bot, user_id, game_night_id):
+    """Schedule a reminder for a user for a specific game night."""
+    try:
+        user = User.get_by_id(user_id)
+        game_night = GameNight.get_by_id(game_night_id)
+        reminder_offset = timedelta(minutes=user.default_reminder_offset_minutes)
+        reminder_time = game_night.scheduled_time - reminder_offset
+
+        if reminder_time > datetime.now():
+            job = bot.scheduler.add_job(
+                send_game_night_reminder,
+                'date',
+                run_date=reminder_time,
+                args=[bot, user.discord_id, game_night_id, game_night.game, game_night.scheduled_time],
+                id=f"reminder_{game_night_id}_{user.discord_id}"
+            )
+            logger.info(f"Scheduled reminder for user {user.discord_id} for game night {game_night_id} at {reminder_time}. Job ID: {job.id}")
+    except User.DoesNotExist:
+        logger.warning(f"User with ID {user_id} not found.")
+    except GameNight.DoesNotExist:
+        logger.warning(f"Game night with ID {game_night_id} not found.")
+    except Exception as e:
+        logger.error(f"Error scheduling reminder: {e}")

@@ -451,14 +451,15 @@ class AutomationTasks(commands.Cog):
         expected_participants_discord_ids_json = json.dumps(
             expected_participants_discord_ids)
 
-        target_channel_id = db_manager.get_guild_planning_channel(
-            str(guild_id))
-        target_channel = self.bot.get_channel(
-            int(target_channel_id)) if target_channel_id else None
+        target_channel_id = db_manager.get_guild_planning_channel(str(guild_id))
+        if not target_channel_id:
+            logger.error(f"No planning channel set for guild {guild_id}. Use /set_planning_channel.")
+            # Optionally, send a message to a default channel or the guild owner
+            return
 
+        target_channel = self.bot.get_channel(int(target_channel_id))
         if not target_channel:
-            logger.error(
-                f"No planning channel for guild {guild_id}. Use /set_planning_channel.")
+            logger.error(f"Planning channel with ID {target_channel_id} not found.")
             return
 
         message = await target_channel.send(embed=embed)

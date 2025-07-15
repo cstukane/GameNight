@@ -1,7 +1,16 @@
 from datetime import datetime
 
 from peewee import (
-    AutoField, BooleanField, CharField, CompositeKey, DateTimeField, ForeignKeyField, IntegerField, Model, SqliteDatabase, TextField
+    AutoField,
+    BooleanField,
+    CharField,
+    CompositeKey,
+    DateTimeField,
+    ForeignKeyField,
+    IntegerField,
+    Model,
+    SqliteDatabase,
+    TextField,
 )
 
 from utils.config import DATABASE_FILE

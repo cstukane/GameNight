@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Game Library</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400&display=swap" rel="stylesheet">
+</head>
+<body>
+    <header>
+        <h1 id="library-title">Loading Library...</h1>
+        <div class="header-content">
+            <input type="text" id="name-filter" placeholder="Filter by Name">
+            <div class="filters">
+                <select id="platform-filter"></select>
+                <select id="players-filter"></select>
+                <select id="user-switcher"></select>
+            </div>
+        </div>
+    </header>
+
+    <main id="game-grid">
+        <!-- The JavaScript will create the new flip cards here -->
+    </main>
+
+    <!-- The modal has been removed -->
+    
+    <script>
+        const INITIAL_DISCORD_ID = "{{ discord_id }}";
+    </script>
+    <script src="/static/app.js"></script>
+</body>
+</html>

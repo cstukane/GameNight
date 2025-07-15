@@ -1,4 +1,4 @@
-from data.models import db, initialize_models, GuildConfig
+from data.models import db, initialize_models
 from utils.config import DATABASE_FILE
 from utils.logging import logger
 

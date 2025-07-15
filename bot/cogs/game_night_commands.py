@@ -19,9 +19,6 @@ from utils.errors import (
 )
 
 
-
-
-
 class GameNightCommands(commands.Cog):
     """A cog for handling game night scheduling and related commands."""
 
@@ -113,7 +110,7 @@ class GameNightCommands(commands.Cog):
         )
         await interaction.followup.send(message)
 
-    
+
 
     @app_commands.command(name="set_game_night_availability", description="Set your availability for an upcoming game night.")
     @app_commands.describe(
@@ -164,7 +161,7 @@ class GameNightCommands(commands.Cog):
     @app_commands.describe(game_night_id="The ID of the game night to finalize.")
     async def finalize_game_night(self, interaction: discord.Interaction, game_night_id: int):
         """Manually finalize a game night, triggering game suggestions and a poll."""
-        await interaction.response.defer()
+        await interaction.response.defer(ephemeral=True)
 
         game_night_details = events.get_game_night_details(game_night_id)
         if not game_night_details:
@@ -181,7 +178,7 @@ class GameNightCommands(commands.Cog):
 
         # Trigger the suggestion and poll process
         await self._handle_game_suggestion_and_poll(game_night_details.id, channel)
-        await interaction.followup.send(f"Game selection poll for Game Night ID {game_night_id} has been posted.")
+        await interaction.followup.send(f"Game selection poll for Game Night ID {game_night_id} has been posted.", ephemeral=True)
 
     async def _handle_game_suggestion_and_poll(self, game_night_id: int, channel: discord.TextChannel):
         """Handle game suggestions and poll creation."""

@@ -6,7 +6,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from data import db_manager
-from data.models import Game, User, UserGame, db
+from data.models import User, db
 from steam.steam_api import get_owned_games
 from utils.logging import logger
 
@@ -30,17 +30,36 @@ async def fetch_and_store_games(user_id, steam_id):
     for game_data in games:
         try:
             with db.atomic():
-                game, created = Game.get_or_create(
-                    steam_appid=str(game_data['appid']),
-                    defaults={'name': game_data['name']}
-                )
-                if not created:
-                    game.name = game_data['name']
-                    game.save()
+                # Fetch detailed game info
+                details = get_game_details(game_data['appid'])
 
-                UserGame.get_or_create(user=user_id, game=game.id, platform='PC')
+                # Extract relevant details, defaulting to None if not found
+                name = details.get('name', game_data['name']) if details else game_data['name']
+                tags = ",".join([g['description'] for g in details.get('genres', [])]) if details and details.get('genres') else None
+                release_date = details.get('release_date', {}).get('date') if details and details.get('release_date') else None
+                min_players = None # Steam API does not directly provide min/max players in appdetails
+                max_players = None # You might need to scrape or use another API for this
+                description = details.get('short_description') if details else None
+
+                # Add or get the game in the global Game table
+                game_id = db_manager.add_game(
+                    name=name,
+                    steam_appid=str(game_data['appid']),
+                    tags=tags,
+                    min_players=min_players,
+                    max_players=max_players,
+                    release_date=release_date,
+                    description=description
+                )
+                if game_id is None:
+                    logger.error(f"Failed to add or retrieve game {name} to the global game list.")
+                    continue
+
+                # Link the game to the user's library
+                db_manager.add_user_game(user_id, game_id, 'PC')
+                logger.info(f"Stored game {name} for user {user_id}.")
         except Exception as e:
-            logger.error(f"Error storing game {game_data.get('name', 'Unknown')}: {e}")
+            logger.error(f"Error storing game {game_data.get('name', 'Unknown')} for user {user_id}: {e}")
 
     logger.info(f"Successfully stored {len(games)} games for user {user_id}.")
 

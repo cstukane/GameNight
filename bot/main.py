@@ -11,8 +11,6 @@ import discord
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from discord.ext import commands
 
-from bot import reminders
-
 # from bot.game_pass_fetcher import fetch_game_pass_games  # Assuming this function exists
 from data.database import initialize_database
 from steam.fetch_library import fetch_and_store_games_for_all_users
@@ -64,7 +62,7 @@ class GameNightBot(commands.Bot):
 #             fetch_game_pass_games, 'interval',
 #             weeks=4, next_run_time=datetime.now()
 #         )
-        
+
         # Schedule weekly availability poll on Mondays at a specific time (e.g., 9 AM)
         self.scheduler.add_job(
             self.get_cog('AutomationTasks').start_weekly_availability_poll, 'cron',

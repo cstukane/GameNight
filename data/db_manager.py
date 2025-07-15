@@ -50,27 +50,37 @@ def add_game(
     """Add a new game to the database or update its details if it already exists."""
     try:
         with db.atomic():
-            defaults = {
-                'steam_appid': steam_appid,
-                'tags': tags,
-                'min_players': min_players,
-                'max_players': max_players,
-                'last_played': last_played,
-                'release_date': release_date,
-                'description': description,
-            }
-            game, created = Game.get_or_create(name=name, defaults=defaults)
-            if not created:
-                game.steam_appid = steam_appid or game.steam_appid
-                game.tags = tags or game.tags
-                game.min_players = min_players or game.min_players
-                game.max_players = max_players or game.max_players
-                game.release_date = release_date or game.release_date
-                game.description = description or game.description
-                game.save()
+            # Use the steam_appid as the primary key for finding games if it exists
+            if steam_appid:
+                game, created = Game.get_or_create(
+                    steam_appid=steam_appid,
+                    defaults={'name': name}
+                )
+            else:  # Fallback to name if no steam_appid
+                game, created = Game.get_or_create(
+                    name=name,
+                    defaults={'steam_appid': steam_appid}
+                )
+
+            # Update fields if new data is provided
+            game.name = name
+            if tags is not None:
+                game.tags = tags
+            if min_players is not None:
+                game.min_players = min_players
+            if max_players is not None:
+                game.max_players = max_players
+            if release_date is not None:
+                game.release_date = release_date
+            if description is not None:
+                game.description = description
+            if last_played is not None:
+                game.last_played = last_played
+            game.save()
+
             return game.id
     except Exception as e:
-        logger.error(f"Error in add_game: {e}")
+        logger.error(f"Error in add_game for '{name}': {e}")
         return None
 
 
@@ -89,15 +99,13 @@ def mark_game_played(game_id):
 def add_user_game(user_id, game_id, platform):
     """Associate a game with a user on a specific platform."""
     try:
-        print(f"Attempting to add user_game: user_id={user_id}, game_id={game_id}, platform={platform}")
-        UserGame.get_or_create(user=user_id, game=game_id, defaults={'platform': platform})
-        print(f"Successfully added user_game: user_id={user_id}, game_id={game_id}")
-    except Exception as e:
-        logger.error(f"Error in add_user_game: {e}")
+        UserGame.get_or_create(user=user_id, game=game_id, platform=platform)
+    except Exception:
+        pass
 
 
 def remove_user_game(user_id, game_id):
-    """Remove a game from a user's library."""
+    """Remove all ownership records for a game from a user's library."""
     try:
         query = UserGame.delete().where((UserGame.user == user_id) & (UserGame.game == game_id))
         query.execute()
@@ -106,7 +114,7 @@ def remove_user_game(user_id, game_id):
 
 
 def set_user_game_installed(user_id, game_id, is_installed):
-    """Set the installed status for a user's game."""
+    """Set the installed status for all of a user's copies of a game."""
     try:
         query = (
             UserGame.update(is_installed=is_installed)
@@ -117,32 +125,16 @@ def set_user_game_installed(user_id, game_id, is_installed):
         logger.error(f"Error in set_user_game_installed: {e}")
 
 
-def set_game_liked_status(user_id, game_id, like: bool):
-    """Set the liked status for a user's game, creating the entry if it doesn't exist."""
+def set_user_game_like_dislike_status(user_id, game_id, liked: bool, disliked: bool):
+    """Set the liked and disliked status for a user's game, affecting all owned platforms."""
     try:
-        user_game, _ = UserGame.get_or_create(user=user_id, game=game_id)
-        if like:
-            user_game.liked = True
-            user_game.disliked = False
-        else:
-            user_game.liked = False
-        user_game.save()
+        query = (
+            UserGame.update(liked=liked, disliked=disliked)
+            .where((UserGame.user == user_id) & (UserGame.game == game_id))
+        )
+        query.execute()
     except Exception as e:
-        logger.error(f"Error in set_game_liked_status: {e}")
-
-
-def set_game_disliked_status(user_id, game_id, dislike: bool):
-    """Set the disliked status for a user's game, creating the entry if it doesn't exist."""
-    try:
-        user_game, _ = UserGame.get_or_create(user=user_id, game=game_id)
-        if dislike:
-            user_game.disliked = True
-            user_game.liked = False
-        else:
-            user_game.disliked = False
-        user_game.save()
-    except Exception as e:
-        logger.error(f"Error in set_game_disliked_status: {e}")
+        logger.error(f"Error in set_user_game_like_dislike_status: {e}")
 
 
 def get_user_by_discord_id(discord_id):
@@ -309,10 +301,7 @@ def set_user_weekly_availability(user_id, available_days: str):
     """Set a user's weekly availability."""
     try:
         availability, _ = UserAvailability.get_or_create(user=user_id)
-        if available_days.lower() == "none":
-            availability.available_days = ""
-        else:
-            availability.available_days = available_days
+        availability.available_days = "" if available_days.lower() == "none" else available_days
         availability.save()
     except Exception as e:
         logger.error(f"Error setting user weekly availability: {e}")
@@ -339,10 +328,21 @@ def get_all_users_weekly_availability():
 
 
 def get_game_owners_with_platforms(game_id):
-    """Retrieve all users who own a specific game and the platform they own it on."""
+    """
+    Retrieve all users who own a specific game, including their username.
+
+    This also includes the platform they own it on.
+    """
     try:
-        query = UserGame.select(User.discord_id, UserGame.platform).join(User).where(UserGame.game == game_id)
-        return [(ug.user.discord_id, ug.platform) for ug in query]
+        # This query joins the UserGame table with the User table to get all necessary info in one go.
+        query = (
+            UserGame.select(User.discord_id, User.username, UserGame.platform)
+            .join(User)
+            .where(UserGame.game == game_id)
+        )
+        # The result will be a list of Peewee model instances.
+        # We convert it to a simple list of tuples for easy use in the API.
+        return [(ug.user.discord_id, ug.user.username, ug.platform) for ug in query]
     except Exception as e:
         logger.error(f"Error getting game owners with platforms: {e}")
         return []

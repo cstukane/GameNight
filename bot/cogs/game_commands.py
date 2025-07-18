@@ -8,13 +8,12 @@ from discord.ext import commands
 
 from bot.game_suggester import suggest_games
 from data import db_manager
-from data.models import Game
-from steam.steam_api import get_game_details
-from steam.steamgriddb_api import get_game_image
 from utils.errors import GameNightError, GameNotFoundError, UserNotFoundError
 from utils.logging import logger
+from steam.igdb_api import igdb_api
+import json
 
-ALLOWED_PLATFORMS = ["PC", "Xbox", "PlayStation", "Switch"]
+ALLOWED_SOURCES = ["steam", "xbox_achievement", "game_pass", "manual"]
 
 
 class GameSuggestionView(discord.ui.View):
@@ -28,9 +27,9 @@ class GameSuggestionView(discord.ui.View):
         for game in suggested_games[:3]:
             if game.steam_appid:
                 button = discord.ui.Button(
-                    label=f"Launch {game.name}",
+                    label=f"Launch {game.title}",
                     style=discord.ButtonStyle.blurple,
-                    custom_id=f"launch_game_{game.id}"
+                    custom_id=f"launch_game_{game.igdb_id}"
                 )
                 self.add_item(button)
 
@@ -53,24 +52,24 @@ class GameSuggestionView(discord.ui.View):
         elif custom_id.startswith("launch_game_"):
             await interaction.response.defer(ephemeral=True)
             user_db = db_manager.get_user_by_discord_id(str(interaction.user.id))
-            game_id = int(custom_id.replace("launch_game_", ""))
-            game = Game.get_by_id(game_id)
+            igdb_id = int(custom_id.replace("launch_game_", ""))
+            game = db_manager.get_game_by_igdb_id(igdb_id)
             if not user_db:
                 await interaction.followup.send("You are not registered. Please add a game first.", ephemeral=True)
                 return False
-            user_game_ownership = db_manager.get_user_game_ownership(user_db.id, game.id)
+            user_game_ownership = db_manager.get_user_game_ownership(user_db.id, game.igdb_id)
             if user_game_ownership and game:
-                if user_game_ownership.platform == "PC" and game.steam_appid:
-                    message = f"Click here to launch **{game.name}**: <steam://run/{game.steam_appid}>"
+                if user_game_ownership.source == "steam" and game.steam_appid:
+                    message = f"Click here to launch **{game.title}**: <steam://run/{game.steam_appid}>"
                     await interaction.followup.send(message, ephemeral=True)
                 else:
                     message = (
-                        f"You own **{game.name}** on {user_game_ownership.platform}. "
+                        f"You own **{game.title}** on {user_game_ownership.source}. "
                         "Please launch it from the app or console."
                     )
                     await interaction.followup.send(message, ephemeral=True)
             else:
-                await interaction.followup.send(f"You don't have **{game.name}** in your library.", ephemeral=True)
+                await interaction.followup.send(f"You don't have **{game.title}** in your library.", ephemeral=True)
             return False
         return True
 
@@ -113,7 +112,7 @@ class GameCommands(commands.Cog):
             await interaction.followup.send(error_msg, ephemeral=True)
             return
 
-        library_url = f"{base_url}/library/{target_user.id}"
+        library_url = f"{base_url}/library/{target_user.id}?viewer_id={interaction.user.id}"
 
         embed_desc = (
             f"Click the button below to browse **{target_user.display_name}s** "
@@ -190,44 +189,44 @@ class GameCommands(commands.Cog):
 
         embed = discord.Embed(title="Tonight's Game Suggestions", color=discord.Color.purple())
         for game in suggested_games[:3]:
-            value = f"Players: {game.min_players or '?'} | Tags: {game.tags or 'N/A'}"
-            embed.add_field(name=game.name, value=value, inline=False)
-        if suggested_games:
-            first_game_image = get_game_image(suggested_games[0].name, "grid")
-            if first_game_image:
-                embed.set_thumbnail(url=first_game_image)
+            value = f"Players: {game.min_players or '?'} - {game.max_players or '?'}\n"
+            if game.cover_url:
+                value += f"[Cover Art]({game.cover_url})\n"
+            embed.add_field(name=game.title, value=value, inline=False)
+        if suggested_games and suggested_games[0].cover_url:
+            embed.set_thumbnail(url=suggested_games[0].cover_url)
         view = GameSuggestionView(suggested_games)
         await interaction.followup.send(embed=embed, view=view)
 
     @app_commands.command(name="add_game", description="Manually adds a game you own to your library.")
     @app_commands.describe(
         name="The name of the game.",
-        platform="The platform you own the game on.",
+        source="The source you own the game on (e.g., 'steam', 'xbox_achievement', 'game_pass', 'manual').",
+        igdb_id="The IGDB ID of the game (if known).",
         steam_appid="The Steam App ID of the game (if applicable).",
         min_players="Minimum number of players.",
         max_players="Maximum number of players."
     )
     async def add_game(
-        self, interaction: discord.Interaction, name: str, platform: str,
-        steam_appid: int = None, min_players: int = None, max_players: int = None
+        self, interaction: discord.Interaction, name: str, source: str,
+        igdb_id: int = None, steam_appid: int = None, min_players: int = None, max_players: int = None
     ):
         """Manually add a game to your library."""
         await interaction.response.defer(ephemeral=True)
-        if platform not in ALLOWED_PLATFORMS:
-            error_msg = f"Invalid platform. Choose from: {', '.join(ALLOWED_PLATFORMS)}"
+        if source not in ALLOWED_SOURCES:
+            error_msg = f"Invalid source. Choose from: {', '.join(ALLOWED_SOURCES)}"
             raise GameNightError(error_msg)
-        if steam_appid:
-            details = get_game_details(steam_appid)
-        else:
-            details = {}
-        game_name = details.get('name', name)
-        tags = ",".join([g['description'] for g in details.get('genres', [])])
-        release_date = details.get('release_date', {}).get('date')
-        description = details.get('short_description')
+
         user_db_id = db_manager.add_user(str(interaction.user.id), interaction.user.display_name)
-        game_db_id = db_manager.add_game(game_name, steam_appid, tags, min_players, max_players, release_date, description)
-        db_manager.add_user_game(user_db_id, game_db_id, platform)
-        success_msg = f"Successfully added **{game_name}** on **{platform}** to your library!"
+        game_db_id = await db_manager.add_game(
+            title=name, igdb_id=igdb_id, steam_appid=steam_appid,
+            min_players=min_players, max_players=max_players
+        )
+        # Retrieve the game object to get the potentially updated title from IGDB
+        game_obj = db_manager.get_game_by_igdb_id(game_db_id)
+        game_title = game_obj.title if game_obj else name
+        db_manager.add_user_game(user_db_id, game_db_id, source)
+        success_msg = f"Successfully added **{game_title}** from **{source}** to your library!"
         await interaction.followup.send(success_msg)
 
     @add_game.autocomplete('name')
@@ -235,10 +234,10 @@ class GameCommands(commands.Cog):
         """Autocomplete for game names."""
         return [app_commands.Choice(name=g, value=g) for g in db_manager.search_games_by_name(current)][:25]
 
-    @add_game.autocomplete('platform')
-    async def platform_autocomplete(self, interaction: discord.Interaction, current: str):
-        """Autocomplete for platform names."""
-        return [app_commands.Choice(name=p, value=p) for p in ALLOWED_PLATFORMS if current.lower() in p.lower()]
+    @add_game.autocomplete('source')
+    async def source_autocomplete(self, interaction: discord.Interaction, current: str):
+        """Autocomplete for source names."""
+        return [app_commands.Choice(name=s, value=s) for s in ALLOWED_SOURCES if current.lower() in s.lower()]
 
 
 async def setup(bot):
@@ -261,21 +260,21 @@ class GameManagementView(discord.ui.View):
         """Clear and rebuild the view components."""
         self.clear_items()
         for i, game in enumerate(self.games):
-            user_game = db_manager.get_user_game_ownership(self.user_id, game.id)
+            user_game = db_manager.get_user_game_ownership(self.user_id, game.igdb_id)
             owned = user_game is not None
             installed = user_game.is_installed if owned else False
             current_row = i // 2
-            owned_label = f"{game.name} - Owned"
+            owned_label = f"{game.title} - Owned"
             owned_style = discord.ButtonStyle.success if owned else discord.ButtonStyle.secondary
             owned_button = discord.ui.Button(
-                label=owned_label[:80], custom_id=f"toggle_owned_{game.id}",
+                label=owned_label[:80], custom_id=f"toggle_owned_{game.igdb_id}",
                 style=owned_style, row=current_row
             )
             self.add_item(owned_button)
             installed_label = "Installed" if installed else "Not Installed"
             installed_style = discord.ButtonStyle.blurple if installed else discord.ButtonStyle.grey
             installed_button = discord.ui.Button(
-                label=installed_label, custom_id=f"toggle_installed_{game.id}",
+                label=installed_label, custom_id=f"toggle_installed_{game.igdb_id}",
                 style=installed_style, disabled=not owned, row=current_row
             )
             self.add_item(installed_button)
@@ -289,10 +288,10 @@ class GameManagementView(discord.ui.View):
         else:
             field_text = []
             for game in self.games:
-                user_game = db_manager.get_user_game_ownership(self.user_id, game.id)
+                user_game = db_manager.get_user_game_ownership(self.user_id, game.igdb_id)
                 owned_emoji = '✅' if user_game else '❌'
                 installed_emoji = '✅' if user_game and user_game.is_installed else '❌'
-                field_text.append(f"**{game.name}** (Owned: {owned_emoji} | Installed: {installed_emoji})")
+                field_text.append(f"**{game.title}** (Owned: {owned_emoji} | Installed: {installed_emoji})")
             embed.add_field(name="Your Library", value="\n".join(field_text), inline=False)
         return embed
 
@@ -329,7 +328,7 @@ class GameManagementView(discord.ui.View):
                 if user_game:
                     db_manager.remove_user_game(self.user_id, game_id)
                 else:
-                    db_manager.add_user_game(self.user_id, game_id, "PC")
+                    db_manager.add_user_game(self.user_id, game_id, "manual") # Default to manual if adding via this command
             elif sub_action == "installed":
                 if user_game:
                     db_manager.set_user_game_installed(self.user_id, game_id, not user_game.is_installed)

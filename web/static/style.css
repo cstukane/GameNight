@@ -234,3 +234,24 @@ h1 {
     padding-left: 0;
     margin: 0;
 }
+
+/* --- Game Pass Overlay --- */
+.game-pass-overlay {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 40px; /* Adjust size as needed */
+    height: 40px; /* Adjust size as needed */
+    background-color: #107C10; /* Xbox green */
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 10; /* Ensure it's above the cover art */
+    background-image: url('../static/images/xbox.svg');
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    opacity: 0.4;
+}
+}

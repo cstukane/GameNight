@@ -5,6 +5,8 @@ from datetime import datetime
 # Third-party imports
 from peewee import fn
 
+# --- NEW IMPORTS ADDED HERE ---
+from steam.igdb_api import igdb_api
 from utils.logging import logger
 
 # Local application imports
@@ -20,6 +22,7 @@ from .models import (
     UserAvailability,
     UserGame,
     db,
+    GamePassGame,
 )
 
 
@@ -43,44 +46,90 @@ def add_user(discord_id, username, steam_id=None):
         return None
 
 
-def add_game(
-    name, steam_appid=None, tags=None, min_players=None, max_players=None,
-    release_date=None, description=None, last_played=None
+async def add_game(
+    title, igdb_id=None, steam_appid=None, tags=None, min_players=None, max_players=None,
+    release_date=None, description=None, last_played=None, metacritic=None, cover_url=None, multiplayer_info=None
 ):
     """Add a new game to the database or update its details if it already exists."""
     try:
         with db.atomic():
-            # Use the steam_appid as the primary key for finding games if it exists
-            if steam_appid:
-                game, created = Game.get_or_create(
-                    steam_appid=steam_appid,
-                    defaults={'name': name}
+            # In your models.py, igdb_id is the primary key for Game, so we prioritize it.
+            if igdb_id:
+                # If an IGDB ID is provided, use it directly.
+                pass
+            elif steam_appid:
+                # Try to translate Steam App ID to IGDB ID
+                translated_igdb_ids = await igdb_api.translate_store_ids_to_igdb_ids(
+                    platform_name="steam",
+                    external_ids=[str(steam_appid)]
                 )
-            else:  # Fallback to name if no steam_appid
-                game, created = Game.get_or_create(
-                    name=name,
-                    defaults={'steam_appid': steam_appid}
-                )
+                if translated_igdb_ids:
+                    igdb_id = list(translated_igdb_ids)[0] # Take the first one if multiple
+                else:
+                    logger.warning(f"Could not translate Steam App ID {steam_appid} for {title} to IGDB ID.")
 
-            # Update fields if new data is provided
-            game.name = name
-            if tags is not None:
-                game.tags = tags
-            if min_players is not None:
-                game.min_players = min_players
-            if max_players is not None:
-                game.max_players = max_players
-            if release_date is not None:
-                game.release_date = release_date
-            if description is not None:
-                game.description = description
-            if last_played is not None:
-                game.last_played = last_played
+            # If no IGDB ID yet, try to resolve it using fuzzy matching on the title
+            if not igdb_id and title:
+                resolved_id = await _resolve_canonical_igdb_id(title)
+                if resolved_id:
+                    logger.info(f"Resolved canonical IGDB ID for '{title}' to {resolved_id}")
+                    igdb_id = resolved_id
+                else:
+                    logger.warning(f"Could not resolve canonical IGDB ID for '{title}'.")
+
+            # If we still don't have an IGDB ID, we cannot proceed with adding/updating the game.
+            if not igdb_id:
+                logger.error(f"Cannot add game '{title}': No IGDB ID could be determined.")
+                return None
+
+            # Now that we have an IGDB ID, get or create the game.
+            game, created = Game.get_or_create(
+                igdb_id=igdb_id,
+                defaults={'title': title, 'steam_appid': steam_appid}
+            )
+
+            # If we have an IGDB ID (either from input or translated), fetch details and cover
+            if igdb_id:
+                game_data_list = await igdb_api.get_game_by_igdb_id(igdb_id)
+                if game_data_list:
+                    game_data = game_data_list[0]
+                    if not title: # Only update title if it wasn't provided
+                        game.title = game_data.get("name", title)
+                    if "cover" in game_data and "image_id" in game_data["cover"]:
+                        cover_url = igdb_api.get_cover_url(game_data["cover"]["image_id"])
+                        game.cover_url = cover_url
+                    if "summary" in game_data:
+                        game.description = game_data["summary"]
+                    if "multiplayer_modes" in game_data:
+                        game.multiplayer_info = json.dumps(game_data["multiplayer_modes"])
+                    if "aggregated_rating" in game_data:
+                        game.metacritic = int(game_data["aggregated_rating"])
+                    if "first_release_date" in game_data:
+                        game.release_date = datetime.fromtimestamp(game_data["first_release_date"]).strftime('%Y-%m-%d')
+                    if "multiplayer_modes" in game_data:
+                        # Assuming the first multiplayer mode entry has min/max players
+                        if game_data["multiplayer_modes"] and len(game_data["multiplayer_modes"]) > 0:
+                            game.min_players = game_data["multiplayer_modes"][0].get("splitscreen_minimum") or game_data["multiplayer_modes"][0].get("offline_minimum") or game_data["multiplayer_modes"][0].get("online_minimum")
+                            game.max_players = game_data["multiplayer_modes"][0].get("splitscreen_maximum") or game_data["multiplayer_modes"][0].get("offline_maximum") or game_data["multiplayer_modes"][0].get("online_maximum")
+                    # Add other fields as needed from IGDB data
+
+            # Update fields only if they are provided
+            if title is not None: game.title = title
+            if steam_appid is not None: game.steam_appid = steam_appid
+            if tags is not None: game.tags = tags
+            if min_players is not None: game.min_players = min_players
+            if max_players is not None: game.max_players = max_players
+            if release_date is not None: game.release_date = release_date
+            if description is not None: game.description = description
+            if last_played is not None: game.last_played = last_played
+            if metacritic is not None: game.metacritic = metacritic
+            if cover_url is not None: game.cover_url = cover_url
+            if multiplayer_info is not None: game.multiplayer_info = multiplayer_info
             game.save()
 
-            return game.id
+            return game.igdb_id
     except Exception as e:
-        logger.error(f"Error in add_game for '{name}': {e}")
+        logger.error(f"Error in add_game for '{title}': {e}")
         return None
 
 
@@ -96,18 +145,190 @@ def mark_game_played(game_id):
         logger.error(f"Error in mark_game_played: {e}")
 
 
-def add_user_game(user_id, game_id, platform):
-    """Associate a game with a user on a specific platform."""
+def add_user_game(user_id, game_id, source):
+    """Associate a game with a user on a specific source platform."""
     try:
-        UserGame.get_or_create(user=user_id, game=game_id, platform=platform)
-    except Exception:
-        pass
+        # This will create the link only if the user doesn't already have
+        # this exact game from this exact source.
+        UserGame.get_or_create(user=user_id, game=game_id, source=source)
+    except Exception as e:
+        logger.debug(f"Could not add UserGame link (might already exist): {e}")
 
 
-def remove_user_game(user_id, game_id):
-    """Remove all ownership records for a game from a user's library."""
+def get_game_pass_catalog():
+    """Retrieve the entire Game Pass catalog from the database."""
+    logger.debug(f"Attempting to retrieve Game Pass catalog from database.")
+    try:
+        return list(GamePassGame.select(GamePassGame.microsoft_store_id, GamePassGame.title))
+    except Exception as e:
+        logger.error(f"Error getting game pass catalog: {e}")
+        return []
+
+
+def add_game_pass_game(title, microsoft_store_id):
+    """Add a new Game Pass game to the database or update its details if it already exists."""
+    try:
+        with db.atomic():
+            game, created = GamePassGame.get_or_create(
+                microsoft_store_id=microsoft_store_id,
+                defaults={'title': title}
+            )
+            if not created:
+                game.title = title
+                game.save()
+            return game.id
+    except Exception as e:
+        logger.error(f"Error in add_game_pass_game for '{title}': {e}")
+        return None
+
+async def _resolve_canonical_igdb_id(game_title: str) -> int | None:
+    """
+    Resolves the most canonical IGDB ID for a given game title using fuzzy matching.
+    Prioritizes exact matches and shorter, more general titles.
+    """
+    search_results = await igdb_api.search_games(game_title, limit=10)
+
+    if not search_results:
+        return None
+
+    # Normalize titles for comparison (lowercase, remove common suffixes)
+    def normalize_title(title: str) -> str:
+        title = title.lower()
+        # Remove common edition suffixes
+        suffixes = [
+            "edition", "deluxe", "ultimate", "gold", "silver", "collectors",
+            "complete", "game of the year", "goty", "remastered", "hd",
+            "definitive", "anniversary", "vr"
+        ]
+        for suffix in suffixes:
+            title = re.sub(r'\s+' + re.escape(suffix) + r'\b', '', title)
+        # Remove non-alphanumeric characters and extra spaces
+        title = re.sub(r'[^a-z0-9]+', ' ', title).strip()
+        return title
+
+    normalized_query = normalize_title(game_title)
+
+    best_match_id = None
+    best_match_score = -1
+
+    for result in search_results:
+        if "name" not in result: # Skip results without a name
+            continue
+
+        normalized_result_name = normalize_title(result["name"])
+
+        # Prioritize exact matches of normalized titles
+        if normalized_result_name == normalized_query:
+            # If an exact match, and it's shorter or equal length, it's a strong candidate
+            if best_match_id is None or len(result["name"]) <= len(search_results[best_match_score]["name"] if best_match_score != -1 else float('inf')):
+                best_match_id = result["id"]
+                best_match_score = 100 # High score for exact normalized match
+                # If we find an exact normalized match that's also the shortest, we can often stop early
+                if len(result["name"]) == len(game_title): # Original titles are exact match
+                    return best_match_id
+                continue
+
+        # Simple substring matching for now, can be improved with more advanced fuzzy logic
+        # Consider results that contain the query title, and prefer shorter ones
+        if normalized_query in normalized_result_name:
+            score = len(normalized_query) / len(normalized_result_name) # Higher score for closer match
+            if score > best_match_score:
+                best_match_score = score
+                best_match_id = result["id"]
+
+    return best_match_id
+
+# --- NEW CENTRAL SYNC FUNCTION ADDED HERE ---
+async def sync_user_game_pass_library(user_id: int, has_game_pass: bool):
+    """
+    Synchronizes a user's library with the Game Pass catalog.
+    Adds games if has_game_pass is True, removes their 'game_pass' sourced games if False.
+    This is the central "intermediary" function you wanted.
+    """
+    logger.info(f"Syncing Game Pass library for user ID {user_id}. Status: {has_game_pass}")
+
+    if not has_game_pass:
+        # User has disabled Game Pass, so remove all their 'game_pass' source games.
+        # This will not touch their games from 'steam' or other sources.
+        query = UserGame.delete().where(
+            (UserGame.user == user_id) &
+            (UserGame.source == 'game_pass')
+        )
+        deleted_rows = query.execute()
+        logger.info(f"Removed {deleted_rows} Game Pass games from user ID {user_id}'s library.")
+        return
+
+    # User has enabled Game Pass, so we add the games.
+    # 1. Get the raw list of games from our Game Pass catalog table.
+    game_pass_catalog = get_game_pass_catalog()
+    if not game_pass_catalog:
+        logger.warning("Game Pass catalog is empty. Cannot sync library.")
+        return
+
+    microsoft_store_ids = {game.microsoft_store_id for game in game_pass_catalog if game.microsoft_store_id}
+
+    # 2. Translate those raw IDs to our canonical IGDB IDs.
+    try:
+        game_pass_igdb_ids = await igdb_api.translate_store_ids_to_igdb_ids(
+            platform_name="Microsoft Store",
+            external_ids=list(microsoft_store_ids)
+        )
+        logger.info(f"Translated to {len(game_pass_igdb_ids)} unique IGDB IDs for Game Pass.")
+    except Exception as e:
+        logger.error(f"Failed to translate Microsoft Store IDs to IGDB IDs during sync: {e}")
+        return
+
+    # 3. Add each game to the user's library.
+    games_added_count = 0
+    for igdb_id in game_pass_igdb_ids:
+        # First, ensure the game exists in our main 'Game' table.
+        game_in_db = get_game_by_igdb_id(igdb_id)
+        if not game_in_db:
+            # If it's a new game to our system, fetch its details from IGDB and add it.
+            game_data_list = await igdb_api.get_game_by_igdb_id(igdb_id)
+            if game_data_list:
+                game_data = game_data_list[0]
+                cover_url = igdb_api.get_cover_url(game_data.get("cover", {}).get("image_id")) if game_data.get("cover") else None
+
+                # Use our existing add_game function to create it in the central 'Game' table
+                add_game(
+                    igdb_id=igdb_id,
+                    title=game_data.get("name", "Unknown Title"),
+                    cover_url=cover_url
+                )
+
+        # Now that we know the game is in the 'Game' table, link it to the user
+        # with the 'game_pass' source.
+        game_obj = get_game_by_igdb_id(igdb_id)
+        if game_obj:
+            # get_or_create is perfect here. It will only create the link if
+            # this user doesn't already have this game from the 'game_pass' source.
+            _, created = UserGame.get_or_create(
+                user=user_id,
+                game=game_obj.igdb_id,
+                source='game_pass'
+            )
+            if created:
+                games_added_count += 1
+
+    logger.info(f"Added/verified {games_added_count} new Game Pass games to user ID {user_id}'s library.")
+
+
+def get_users_with_gamepass():
+    """Retrieve all users who have the has_game_pass flag set to True."""
+    try:
+        return list(User.select().where(User.has_game_pass == True))
+    except Exception as e:
+        logger.error(f"Error in get_users_with_gamepass: {e}")
+        return []
+
+
+def remove_user_game(user_id, game_id, source=None):
+    """Remove ownership records for a game from a user's library, optionally by source."""
     try:
         query = UserGame.delete().where((UserGame.user == user_id) & (UserGame.game == game_id))
+        if source:
+            query = query.where(UserGame.source == source)
         query.execute()
     except Exception as e:
         logger.error(f"Error in remove_user_game: {e}")
@@ -155,11 +376,29 @@ def get_all_users():
         return []
 
 
+def get_users_with_xbox_tokens():
+    """Retrieve all users who have an Xbox refresh token."""
+    try:
+        return list(User.select().where(User.xbox_refresh_token.is_null(False)))
+    except Exception as e:
+        logger.error(f"Error in get_users_with_xbox_tokens: {e}")
+        return []
+
+
 def get_game_by_name(name):
     """Retrieve a game by its name (case-insensitive)."""
     try:
-        return Game.get(fn.LOWER(Game.name) == name.lower())
+        return Game.get(fn.LOWER(Game.title) == name.lower())
     except Game.DoesNotExist:
+        return None
+
+
+def get_game_by_igdb_id(igdb_id):
+    """Retrieve a game by its IGDB ID."""
+    try:
+        return Game.get_or_none(Game.igdb_id == igdb_id)
+    except Exception as e:
+        logger.error(f"Error in get_game_by_igdb_id: {e}")
         return None
 
 
@@ -176,7 +415,8 @@ def search_games_by_name(query):
     if not query:
         return []
     try:
-        return [game.name for game in Game.select().where(Game.name.icontains(query)).limit(25)]
+        # Based on your Game model, the field is 'title'
+        return [game.title for game in Game.select().where(Game.title.icontains(query)).limit(25)]
     except Exception as e:
         logger.error(f"Error in search_games_by_name: {e}")
         return []
@@ -194,10 +434,24 @@ def get_user_game_ownerships(user_id):
 def set_steam_id(user_id, steam_id):
     """Set the Steam ID for a given user."""
     try:
+        logger.info(f"Attempting to set Steam ID {steam_id} for user {user_id}.")
         query = User.update(steam_id=steam_id).where(User.id == user_id)
+        rows_updated = query.execute()
+        if rows_updated > 0:
+            logger.info(f"Successfully set Steam ID {steam_id} for user {user_id}.")
+        else:
+            logger.warning(f"Could not set Steam ID {steam_id} for user {user_id}. User not found or no change.")
+    except Exception as e:
+        logger.error(f"Error in set_steam_id for user {user_id} with Steam ID {steam_id}: {e}")
+
+
+def set_xbox_tokens(user_id, refresh_token, xuid):
+    """Set the Xbox refresh token and XUID for a given user."""
+    try:
+        query = User.update(xbox_refresh_token=refresh_token, xbox_xuid=xuid).where(User.id == user_id)
         query.execute()
     except Exception as e:
-        logger.error(f"Error in set_steam_id: {e}")
+        logger.error(f"Error in set_xbox_tokens: {e}")
 
 
 def set_user_reminder_offset(user_id, offset_minutes):
@@ -331,18 +585,15 @@ def get_game_owners_with_platforms(game_id):
     """
     Retrieve all users who own a specific game, including their username.
 
-    This also includes the platform they own it on.
+    This also includes the source they own it on.
     """
     try:
-        # This query joins the UserGame table with the User table to get all necessary info in one go.
         query = (
-            UserGame.select(User.discord_id, User.username, UserGame.platform)
+            UserGame.select(User.discord_id, User.username, UserGame.source)
             .join(User)
             .where(UserGame.game == game_id)
         )
-        # The result will be a list of Peewee model instances.
-        # We convert it to a simple list of tuples for easy use in the API.
-        return [(ug.user.discord_id, ug.user.username, ug.platform) for ug in query]
+        return [(ug.user.discord_id, ug.user.username, ug.source) for ug in query]
     except Exception as e:
         logger.error(f"Error getting game owners with platforms: {e}")
         return []

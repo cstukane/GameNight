@@ -6,10 +6,85 @@ from discord import app_commands
 from discord.ext import commands
 from peewee import fn
 
+# Import the new, modern library
+from xbox.webapi.api.client import XboxLiveClient
+from xbox.webapi.authentication.manager import AuthenticationManager
+from xbox.webapi.common.exceptions import AuthenticationException
+
 from data import db_manager
 from data.models import VoiceActivity
 from steam.fetch_library import fetch_and_store_games
 from utils.errors import UserNotFoundError
+from utils.logging import logger
+from utils.config import XBOX_CLIENT_ID, XBOX_CLIENT_SECRET, XBOX_REDIRECT_URI
+
+
+class XboxLinkModal(discord.ui.Modal, title="Submit Xbox URL"):
+    url_input = discord.ui.TextInput(
+        label="Paste the full URL from the blank page here",
+        style=discord.TextStyle.long,
+        placeholder="https://login.live.com/oauth20_desktop.srf?code=M.12345...",
+        required=True,
+    )
+
+    def __init__(self, bot):
+        super().__init__()
+        self.bot = bot
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        url = self.url_input.value
+
+        if "code=" not in url:
+            await interaction.followup.send(
+                "That doesn't look like the correct URL. Please make sure you copied the entire URL from the address bar of the blank page after logging in.",
+                ephemeral=True,
+            )
+            return
+
+        try:
+            auth_mgr = AuthenticationManager(
+                self.bot.web_client, XBOX_CLIENT_ID, XBOX_CLIENT_SECRET, XBOX_REDIRECT_URI
+            )
+            await auth_mgr.request_tokens(url)
+
+            if not auth_mgr.is_authenticated():
+                raise AuthenticationException("Authentication failed with the provided URL.")
+
+            xbl_client = XboxLiveClient(auth_mgr)
+            # Assuming gamertag is available from auth_mgr, if not, might need to fetch profile first
+            profile = await xbl_client.profile.get_profile_by_gamertag(auth_mgr.gamertag)
+            xuid = profile.xuid
+
+            user_db = db_manager.get_user_by_discord_id(str(interaction.user.id))
+            if not user_db:
+                db_manager.add_user(str(interaction.user.id), interaction.user.display_name)
+                user_db = db_manager.get_user_by_discord_id(str(interaction.user.id))
+
+            db_manager.set_xbox_tokens(user_db.id, auth_mgr.oauth.refresh_token, xuid)
+
+            await interaction.followup.send("Your Xbox account has been successfully linked! The bot will now sync your played games weekly.", ephemeral=True)
+
+        except Exception as e:
+            logger.error(f"An error occurred during Xbox token submission: {e}", exc_info=True)
+            await interaction.followup.send(f"An error occurred: {e}. Please try the `/link_xbox` command again.", ephemeral=True)
+
+
+class XboxLinkView(discord.ui.View):
+    def __init__(self, bot, auth_url: str):
+        super().__init__(timeout=300)  # 5-minute timeout
+        self.bot = bot
+
+        # Define buttons in order
+        self.add_item(discord.ui.Button(label="Step 1: Open Microsoft Login", style=discord.ButtonStyle.link, url=auth_url))
+        self.add_item(discord.ui.Button(label="Step 2: Paste URL", style=discord.ButtonStyle.primary, custom_id="paste_url_button"))
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.data.get("custom_id") == "paste_url_button":
+            modal = XboxLinkModal(self.bot)
+            await interaction.response.send_modal(modal)
+            return False # Stop further processing
+        return True # Allow other interactions if any
 
 
 class UtilityCommands(commands.Cog):
@@ -61,8 +136,6 @@ class UtilityCommands(commands.Cog):
 
         await interaction.followup.send(embed=embed, view=view)
 
-    # ... the rest of the file (set_steam_id, help, etc.) remains the same ...
-
     @app_commands.command(name="set_steam_id", description="Sets your Steam ID for automatic library syncing.")
     @app_commands.describe(steam_id="Your 64-bit Steam ID.")
     async def set_steam_id(self, interaction: discord.Interaction, steam_id: str):
@@ -76,9 +149,51 @@ class UtilityCommands(commands.Cog):
             )
             await interaction.followup.send(help_message, ephemeral=True)
             return
-        user_db = db_manager.add_user(str(interaction.user.id), interaction.user.display_name, steam_id=steam_id)
+        
+        db_manager.add_user(str(interaction.user.id), interaction.user.display_name)
+        user_db = db_manager.get_user_by_discord_id(str(interaction.user.id))
         await fetch_and_store_games(user_db, steam_id)
         await interaction.followup.send("Your Steam library has been successfully synced!", ephemeral=True)
+
+    # @app_commands.command(name="link_xbox", description="Links your Xbox account for library syncing.")
+    # async def link_xbox(self, interaction: discord.Interaction):
+        """Initiate the Xbox account linking process using a modal."""
+        await interaction.response.defer(ephemeral=True)
+
+        # --- FIX START ---
+        # Check if the required configuration variables are present.
+        if not XBOX_CLIENT_ID or not XBOX_CLIENT_SECRET:
+            logger.error("XBOX_CLIENT_ID or XBOX_CLIENT_SECRET is not configured.")
+            await interaction.followup.send(
+                "The bot's Xbox integration is not configured correctly. Please contact the bot administrator.",
+                ephemeral=True
+            )
+            return
+        # --- FIX END ---
+
+        try:
+            auth_mgr = AuthenticationManager(
+                self.bot.web_client, XBOX_CLIENT_ID, XBOX_CLIENT_SECRET, XBOX_REDIRECT_URI
+            )
+            auth_url = auth_mgr.generate_authorization_url()
+
+            embed = discord.Embed(
+                title="Link your Xbox Account",
+                description=(
+                    "**Step 1:** Click the button below to sign in to your Microsoft account.\n\n"
+                    "**Step 2:** After signing in, you will be sent to a **blank white page**. "
+                    "Copy the entire URL from your browser's address bar.\n\n"
+                    "**Step 3:** Come back here and click the `Paste URL` button to finish."
+                ),
+                color=discord.Color.green()
+            )
+
+            view = XboxLinkView(self.bot, auth_url)
+            await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+
+        except Exception as e:
+            logger.error(f"An error occurred during Xbox linking setup: {e}", exc_info=True)
+            await interaction.followup.send(f"An error occurred during Xbox linking setup: {e}", ephemeral=True)
 
     @app_commands.command(name="help", description="Displays a list of all available commands.")
     async def help(self, interaction: discord.Interaction):
@@ -91,6 +206,8 @@ class UtilityCommands(commands.Cog):
             "**/ping** - Check if the bot is online.\n"
             "**/profile `[user]`** - View a user's profile and game library link.\n"
             "**/set_steam_id `<steam_id>`** - Link your Steam account.\n"
+            "**/link_xbox** - Link your Xbox account.\n"
+            "**/set_gamepass_status `<True/False>`** - Tell the bot if you have Game Pass.\n"
             "**/set_reminder_offset `<minutes>`** - Set your preferred reminder time."
         )
         embed.add_field(name="General & Profile", value=general_commands_desc, inline=False)
@@ -110,7 +227,10 @@ class UtilityCommands(commands.Cog):
 
     @app_commands.command(name="set_weekly_availability", description="Set your recurring weekly availability for game nights.")
     @app_commands.describe(
-        available_days="Comma-separated day names (e.g., 'Monday,Wed') or numbers (0=Mon, 6=Sun)."
+        available_days=(
+            "Comma-separated day names (e.g., 'Monday,Wed') "
+            "or numbers (0=Mon, 6=Sun)."
+        )
     )
     async def set_weekly_availability(self, interaction: discord.Interaction, available_days: str):
         """Set a user's recurring weekly availability."""
@@ -127,7 +247,8 @@ class UtilityCommands(commands.Cog):
                 elif day in day_mapping:
                     processed_days.append(str(day_mapping[day]))
                 else:
-                    await interaction.followup.send(f"Invalid day '{day}'. Use day names or numbers (0-6).", ephemeral=True)
+                    error_msg = f"Invalid day '{day}'. Use day names or numbers (0-6)."
+                    await interaction.followup.send(error_msg, ephemeral=True)
                     return
             final_availability_string = ",".join(sorted(list(set(processed_days))))
             display_message = available_days
@@ -137,20 +258,43 @@ class UtilityCommands(commands.Cog):
             f"Your weekly availability has been set to: **{display_message}**.", ephemeral=True
         )
 
-    @app_commands.command(name="set_game_pass", description="Set your Game Pass status.")
+    @app_commands.command(name="set_gamepass_status", description="Set your Game Pass status and sync your library.")
     @app_commands.describe(has_game_pass="True if you have Game Pass, False otherwise.")
-    async def set_game_pass(self, interaction: discord.Interaction, has_game_pass: bool):
-        """Set a user's Game Pass status in their profile."""
+    async def set_gamepass_status(self, interaction: discord.Interaction, has_game_pass: bool):
+        """Set a user's Game Pass status and syncs their library."""
         await interaction.response.defer(ephemeral=True)
-        user_db_id = db_manager.add_user(str(interaction.user.id), interaction.user.display_name)
-        db_manager.set_user_game_pass_status(user_db_id, has_game_pass)
+
+        # Ensure the user exists in the DB first
+        db_manager.add_user(str(interaction.user.id), interaction.user.display_name)
+        user_db = db_manager.get_user_by_discord_id(str(interaction.user.id))
+
+        if not user_db:
+             await interaction.followup.send("Could not find or create your user profile. Please try again.", ephemeral=True)
+             return
+
+        # 1. Update the user's status in the database
+        db_manager.set_user_game_pass_status(user_db.id, has_game_pass)
         status_text = 'enabled' if has_game_pass else 'disabled'
         await interaction.followup.send(
-            f"Your Game Pass status has been set to **{status_text}**.", ephemeral=True
+            f"Your Game Pass status has been set to **{status_text}**. Syncing your library now, this may take a moment...", ephemeral=True
         )
 
+        # 2. Call our new central function to do the heavy lifting
+        try:
+            await db_manager.sync_user_game_pass_library(user_db.id, has_game_pass)
+            await interaction.edit_original_response(
+                content=f"Your Game Pass status is **{status_text}** and your library has been updated!"
+            )
+        except Exception as e:
+            logger.error(f"Error during manual Game Pass sync for user {interaction.user.id}: {e}", exc_info=True)
+            await interaction.edit_original_response(
+                content="Something went wrong during the library sync. Please try again later."
+            )
+
     @app_commands.command(name="set_reminder_offset", description="Set your default game night reminder offset.")
-    @app_commands.describe(offset_minutes="The time before a game night to send a reminder.")
+    @app_commands.describe(
+        offset_minutes="The time before a game night to send a reminder."
+    )
     @app_commands.choices(offset_minutes=[
         app_commands.Choice(name="15 Minutes", value=15), app_commands.Choice(name="30 Minutes", value=30),
         app_commands.Choice(name="1 Hour", value=60), app_commands.Choice(name="2 Hours", value=120),
@@ -165,7 +309,7 @@ class UtilityCommands(commands.Cog):
         db_manager.set_user_reminder_offset(user_db.id, offset_minutes.value)
         await interaction.followup.send(f"Your reminder offset is set to **{offset_minutes.name}**.", ephemeral=True)
 
-    @app_commands.command(name="discord_wrapped", description="Shows your voice activity statistics for a year.")
+    @app_commands.command(name="wrapped_discord", description="Shows your voice activity statistics for a year.")
     @app_commands.describe(year="The year for which to show statistics (defaults to current year).")
     async def discord_wrapped(self, interaction: discord.Interaction, year: int = None):
         """Show a user's voice activity stats for a given year."""
@@ -203,7 +347,7 @@ class UtilityCommands(commands.Cog):
         embed.add_field(name="Game Nights Attended", value=f"{game_nights_attended} nights", inline=False)
         await interaction.followup.send(embed=embed)
 
-    @app_commands.command(name="game_night_history", description="Shows a user's past game night attendance.")
+    @app_commands.command(name="wrapped_history", description="Shows a user's past game night attendance.")
     @app_commands.describe(user="The user whose game night history you want to view. Defaults to yourself.")
     async def game_night_history(self, interaction: discord.Interaction, user: discord.Member = None):
         """Show a user's game night attendance history."""
@@ -219,7 +363,7 @@ class UtilityCommands(commands.Cog):
         else:
             lines = [
                 f"**{gn.scheduled_time:%Y-%m-%d %I:%M %p}**: "
-                f"{gn.selected_game.name if gn.selected_game else '(Game not selected)'}"
+                f"{gn.selected_game.title if gn.selected_game else '(Game not selected)'}"
                 for gn in game_nights
             ]
             embed.description = "\n".join(lines[:10])
@@ -238,6 +382,7 @@ class UtilityCommands(commands.Cog):
             return
         db_manager.set_guild_main_channel(str(interaction.guild.id), str(channel.id))
         await interaction.followup.send(f"Main channel has been set to {channel.mention}.")
+
 
 async def setup(bot):
     """Load the UtilityCommands cog."""

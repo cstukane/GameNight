@@ -52,7 +52,7 @@ def suggest_games(available_user_ids, group_size=None, preferred_tags=None):
     for game in common_games_data:
         is_excluded_for_any_user = False
         for user_id in available_user_ids:
-            if GameExclusion.get_or_none(user=user_id, game=game.id):
+            if GameExclusion.get_or_none(user=user_id, game=game.igdb_id):
                 is_excluded_for_any_user = True
                 break
         if not is_excluded_for_any_user:
@@ -96,7 +96,7 @@ def suggest_games(available_user_ids, group_size=None, preferred_tags=None):
 
         # Score based on liked/disliked status
         for user_id in available_user_ids:
-            user_game_entry = UserGame.get_or_none(user=user_id, game=game.id)
+            user_game_entry = UserGame.get_or_none(user=user_id, game=game.igdb_id)
             if user_game_entry:
                 if user_game_entry.liked:
                     score += 20 # Strong boost for liked games
@@ -109,7 +109,7 @@ def suggest_games(available_user_ids, group_size=None, preferred_tags=None):
         # Penalize games that have won recently
         recent_game_nights = GameNight.select().where(GameNight.scheduled_time > datetime.now() - timedelta(days=30))
         for gn in recent_game_nights:
-            if gn.selected_game and gn.selected_game.id == game.id:
+            if gn.selected_game and gn.selected_game.igdb_id == game.igdb_id:
                 score -= 50 # Heavy penalty for recently won games
 
         scored_games.append((game, score))

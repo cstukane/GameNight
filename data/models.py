@@ -37,6 +37,8 @@ class User(BaseModel):
     is_active = BooleanField(default=True)
     has_game_pass = BooleanField(default=False)
     default_reminder_offset_minutes = IntegerField(default=60)  # Default to 60 minutes
+    xbox_refresh_token = TextField(null=True)
+    xbox_xuid = CharField(null=True)
 
 
 class UserAvailability(BaseModel):
@@ -50,15 +52,18 @@ class UserAvailability(BaseModel):
 class Game(BaseModel):
     """Represents a game in the database."""
 
-    id = AutoField()
+    igdb_id = IntegerField(primary_key=True)
     steam_appid = CharField(null=True)
-    name = CharField()
+    title = CharField()
+    cover_url = CharField(null=True)
+    multiplayer_info = TextField(null=True)
     tags = CharField(null=True)
     min_players = IntegerField(null=True)
     max_players = IntegerField(null=True)
     last_played = DateTimeField(null=True)
     release_date = CharField(null=True)
     description = CharField(null=True)
+    metacritic = IntegerField(null=True)
 
 
 class UserGame(BaseModel):
@@ -66,7 +71,7 @@ class UserGame(BaseModel):
 
     user = ForeignKeyField(User, backref='user_games')
     game = ForeignKeyField(Game, backref='game_users')
-    platform = CharField()
+    source = CharField() # e.g., 'steam', 'xbox_achievement', 'game_pass', 'manual'
     liked = BooleanField(default=False)
     disliked = BooleanField(default=False)
     is_installed = BooleanField(default=False)
@@ -74,7 +79,7 @@ class UserGame(BaseModel):
     class Meta:
         """Meta configuration for the UserGame model."""
 
-        primary_key = CompositeKey('user', 'game', 'platform')
+        primary_key = CompositeKey('user', 'game', 'source')
 
 
 class GameNight(BaseModel):
@@ -131,7 +136,15 @@ class GamePassGame(BaseModel):
     """Represents a game available on Game Pass."""
 
     id = AutoField()
-    name = CharField(unique=True)
+    title = CharField()
+    microsoft_store_id = CharField(unique=True)
+
+    # --- THIS IS THE FIX ---
+    class Meta:
+        """Meta configuration for the GamePassGame model."""
+        # This line tells Peewee the exact table name to use,
+        # matching what the Node.js script creates.
+        table_name = 'game_pass_catalog'
 
 
 class GameVote(BaseModel):
@@ -197,14 +210,14 @@ def initialize_models():
         GameNightAttendee,
         GameExclusion,
         VoiceActivity,
-        GamePassGame,
+
         GameVote,
         UserAvailability,
         Poll,
         PollResponse,
         GuildConfig,
+        GamePassGame,
     ])
-    db.close()
 
 
 if __name__ == '__main__':

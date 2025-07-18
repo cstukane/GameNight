@@ -17,6 +17,9 @@
             <div class="filters">
                 <select id="platform-filter"></select>
                 <select id="players-filter"></select>
+                <label for="gamepass-filter" class="checkbox-label">
+                    <input type="checkbox" id="gamepass-filter"> Game Pass
+                </label>
                 <select id="user-switcher"></select>
             </div>
         </div>
@@ -30,6 +33,7 @@
     
     <script>
         const INITIAL_DISCORD_ID = "{{ discord_id }}";
+        const VIEWER_ID = "{{ viewer_id }}";
     </script>
     <script src="/static/app.js"></script>
 </body>

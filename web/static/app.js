@@ -6,9 +6,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const nameFilterInput = document.getElementById('name-filter');
     const platformFilter = document.getElementById('platform-filter');
     const playersFilter = document.getElementById('players-filter');
+    const gamepassFilter = document.getElementById('gamepass-filter');
     
     let allGames = [];
     let currentDiscordId = INITIAL_DISCORD_ID;
+    let viewerId = VIEWER_ID;
 
     // --- Initial Load ---
     function initialize() {
@@ -37,7 +39,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function loadUserLibrary(discordId) {
         currentDiscordId = discordId;
-        isCurrentUserLibrary = (currentDiscordId === INITIAL_DISCORD_ID);
+        isCurrentUserLibrary = (currentDiscordId === viewerId);
 
         const selectedUser = Array.from(userSwitcher.options).find(opt => opt.value === discordId);
         if (selectedUser) libraryTitle.textContent = `${selectedUser.textContent}'s Library`;
@@ -53,11 +55,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Event Listeners for Filters ---
     userSwitcher.addEventListener('change', () => loadUserLibrary(userSwitcher.value));
-    [nameFilterInput, platformFilter, playersFilter].forEach(el => el.addEventListener('input', applyFilters));
+    [nameFilterInput, platformFilter, playersFilter, gamepassFilter].forEach(el => el.addEventListener('input', applyFilters));
 
     // --- Filtering Logic ---
     function populateFilters(games) {
-        const platforms = [...new Set(games.map(g => g.platform))].sort();
+        const allSources = new Set();
+        games.forEach(game => {
+            game.sources.forEach(source => allSources.add(source));
+        });
+        const platforms = Array.from(allSources).sort();
         platformFilter.innerHTML = '<option value="">All Platforms</option>';
         platforms.forEach(p => platformFilter.add(new Option(p, p)));
 
@@ -72,12 +78,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const nameQuery = nameFilterInput.value.toLowerCase();
         const platformQuery = platformFilter.value;
         const playersQuery = parseInt(playersFilter.value, 10);
+        const gamepassChecked = gamepassFilter.checked;
 
         const filteredGames = allGames.filter(game => {
             const nameMatch = game.name.toLowerCase().includes(nameQuery);
-            const platformMatch = !platformQuery || game.platform === platformQuery;
+            // Check if the game's sources include the selected platformQuery
+            const platformMatch = !platformQuery || game.sources.includes(platformQuery);
             const playersMatch = !playersQuery || (game.max_players >= playersQuery);
-            return nameMatch && platformMatch && playersMatch;
+            const gamepassMatch = !gamepassChecked || game.is_game_pass;
+            return nameMatch && platformMatch && playersMatch && gamepassMatch;
         });
         renderGames(filteredGames);
     }
@@ -96,14 +105,13 @@ document.addEventListener('DOMContentLoaded', () => {
             cardContainer.dataset.gameId = game.id;
 
             // --- Define the image URL waterfall ---
-            const steamHeaderUrl = game.steam_appid ? `https://cdn.akamai.steamstatic.com/steam/apps/${game.steam_appid}/header.jpg` : '';
-            const steamGridUrl = game.steam_appid ? `https://cdn.steamgriddb.com/grid/${game.steam_appid}.jpg` : '';
             const placeholderUrl = `/api/placeholder/${encodeURIComponent(game.name)}`;
-            
+            const imageUrl = game.cover_url || placeholderUrl;
+
             // --- Build the card's inner HTML ---
             cardContainer.innerHTML = `
                 <div class="game-card-inner">
-                    <div class="game-card-front">
+                    <div class="game-card-front" style="background-image: url('${imageUrl}');">
                         <div class="game-card-title-banner">${game.name}</div>
                         ${isCurrentUserLibrary ? `
                             <div class="game-card-actions-overlay">
@@ -112,53 +120,38 @@ document.addEventListener('DOMContentLoaded', () => {
                             </div>
                         ` : ''}
                     </div>
+                    ${game.is_game_pass ? '<div class="game-pass-overlay"></div>' : ''}
                     <div class="game-card-back">
                         <p>Loading...</p>
                         ${isCurrentUserLibrary ? `
                             <div class="game-management-buttons">
-                                <button class="toggle-installed-button" data-game-id="${game.id}">
+                                <button class="toggle-owned-button" data-game-id="${game.id}">
+                                    ${game.sources.length > 0 ? 'Mark as Un-Owned' : 'Mark as Owned'}
+                                </button>
+                                <button class="toggle-installed-button" data-game-id="${game.id}" ${game.sources.length === 0 ? 'disabled' : ''}>
                                     ${game.is_installed ? 'Mark as Uninstalled' : 'Mark as Installed'}
                                 </button>
-                                <button class="remove-game-button" data-game-id="${game.id}">Remove from Library</button>
                             </div>
                         ` : ''}
                     </div>
                 </div>
             `;
-            
-            // --- Set the background image with fallbacks ---
-            const frontOfCard = cardContainer.querySelector('.game-card-front');
-            const primaryImageUrl = steamGridUrl || steamHeaderUrl; // Prefer SteamGridDB if available
-
-            // We create a temporary image object to check if the primary URL is valid.
-            const img = new Image();
-            img.src = primaryImageUrl;
-
-            img.onload = () => {
-                // If it loads successfully, use it as the background
-                frontOfCard.style.backgroundImage = `url('${primaryImageUrl}')`;
-            };
-            img.onerror = () => {
-                // If the primary image fails, try the secondary one (if it exists) or the placeholder.
-                const fallbackImageUrl = steamHeaderUrl || placeholderUrl;
-                frontOfCard.style.backgroundImage = `url('${fallbackImageUrl}')`;
-            };
 
             cardContainer.addEventListener('click', (event) => {
                 // Only flip the card if the click is not on an action button
                 if (!event.target.classList.contains('action-button') &&
                     !event.target.classList.contains('toggle-installed-button') &&
-                    !event.target.classList.contains('remove-game-button')) {
-                    handleCardClick(cardContainer, game.id);
+                    !event.target.classList.contains('toggle-owned-button')) {
+                    handleCardClick(cardContainer, game);
                 }
             });
 
             if (isCurrentUserLibrary) {
-                const removeButton = cardContainer.querySelector('.remove-game-button');
-                if (removeButton) {
-                    removeButton.addEventListener('click', (event) => {
+                const toggleOwnedButton = cardContainer.querySelector('.toggle-owned-button');
+                if (toggleOwnedButton) {
+                    toggleOwnedButton.addEventListener('click', (event) => {
                         event.stopPropagation(); // Prevent card flip
-                        handleRemoveGame(game.id);
+                        handleToggleOwned(game.id);
                     });
                 }
 
@@ -191,7 +184,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    function handleCardClick(cardElement, gameId) {
+    function handleCardClick(cardElement, game) {
         const isFlipped = cardElement.classList.contains('flipped');
 
         // Un-flip any other card that is already flipped
@@ -208,33 +201,38 @@ document.addEventListener('DOMContentLoaded', () => {
             const backOfCard = cardElement.querySelector('.game-card-back');
             backOfCard.innerHTML = '<p>Loading...</p>';
 
-            fetch(`/api/game_details/${gameId}`)
+            // Immediately populate with available game data
+            const sourcesHtml = game.sources && game.sources.length > 0
+                ? `<h4>Sources:</h4><ul>${game.sources.map(s => `<li>${s}</li>`).join('')}</ul>`
+                : '';
+
+            backOfCard.innerHTML = `
+                <div class="card-back-title">${game.name}</div>
+                <div class="card-back-content">
+                    <p><strong>Metacritic:</strong> ${game.metacritic || "Not available"}</p>
+                    <p>${game.description || "No summary available."}</p>
+                    ${sourcesHtml}
+                    <div id="owners-list"></div> <!-- Placeholder for owners -->
+                </div>
+            `;
+
+            // Fetch owners separately
+            fetch(`/api/game_details/${game.id}`)
                 .then(res => res.json())
                 .then(details => {
                     const otherOwners = details.owners.filter(o => o.username !== libraryTitle.textContent.replace("'s Library", ""));
                     const ownersHtml = otherOwners.length > 0 
                         ? `<h4>Also Owned By:</h4><ul>${otherOwners.map(o => `<li>${o.username}</li>`).join('')}</ul>`
                         : '';
-
-                    backOfCard.innerHTML = `
-                        <div class="card-back-title">${details.name}</div>
-                        <div class="card-back-content">
-                            <p><strong>Metacritic:</strong> ${details.metacritic}</p>
-                            <p>${details.description || "No summary available."}</p>
-                            ${ownersHtml}
-                        </div>
-                    `;
+                    cardElement.querySelector('#owners-list').innerHTML = ownersHtml;
                 });
         }
     }
 
     // --- New Game Management Functions ---
-    async function handleRemoveGame(gameId) {
-        if (!confirm('Are you sure you want to remove this game from your library?')) {
-            return;
-        }
+    async function handleToggleOwned(gameId) {
         try {
-            const response = await fetch('/api/manage/remove_game', {
+            const response = await fetch('/api/manage/toggle_owned', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -243,14 +241,14 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             const result = await response.json();
             if (result.success) {
-                alert('Game removed successfully!');
+                alert('Game ownership status updated!');
                 loadUserLibrary(currentDiscordId); // Reload library to reflect changes
             } else {
-                alert('Failed to remove game: ' + result.error);
+                alert('Failed to update ownership status: ' + result.error);
             }
         } catch (error) {
-            console.error('Error removing game:', error);
-            alert('An error occurred while removing the game.');
+            console.error('Error toggling ownership status:', error);
+            alert('An error occurred while updating ownership status.');
         }
     }
 

@@ -11,6 +11,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 from data import db_manager
 from steam.steam_api import get_game_details as fetch_steam_details
+from utils.logging import logger
 
 app = Flask(__name__)
 
@@ -30,7 +31,8 @@ def index():
 @app.route('/library/<discord_id>')
 def show_library(discord_id):
     """Render the library view page for a specific user."""
-    return render_template('index.html', discord_id=discord_id)
+    viewer_id = request.args.get('viewer_id')
+    return render_template('index.html', discord_id=discord_id, viewer_id=viewer_id)
 
 # --- Data API Routes ---
 @app.route('/api/users')
@@ -43,20 +45,47 @@ def get_all_users_api():
 @app.route('/api/games/<discord_id>')
 def get_user_games(discord_id):
     """Fetch all games owned by a specific user."""
+    logger.info(f"Attempting to fetch games for Discord ID: {discord_id}")
     user_db = db_manager.get_user_by_discord_id(discord_id)
     if not user_db:
+        logger.warning(f"User with Discord ID {discord_id} not found in database.")
         return jsonify({"error": "User not found"}), 404
+    logger.info(f"Found user: {user_db.username} (DB ID: {user_db.id})")
     user_games_data = db_manager.get_user_game_ownerships(user_db.id)
-    games_list = [{
-        "id": ug.game.id, "name": ug.game.name, "steam_appid": ug.game.steam_appid,
-        "platform": ug.platform, "tags": ug.game.tags or "", "min_players": ug.game.min_players,
-        "max_players": ug.game.max_players, "liked": ug.liked, "disliked": ug.disliked,
-        "is_installed": ug.is_installed
-    } for ug in user_games_data]
+    logger.info(f"Retrieved {len(user_games_data)} game ownership records for user {user_db.username}.")
+    # Consolidate games by IGDB ID to handle multiple sources
+    consolidated_games = {}
+    for ug in user_games_data:
+        game_id = ug.game.igdb_id
+        if game_id not in consolidated_games:
+            consolidated_games[game_id] = {
+                "id": ug.game.igdb_id,
+                "name": ug.game.title,
+                "steam_appid": ug.game.steam_appid,
+                "sources": [], # This will store all sources for this game
+                "tags": ug.game.tags or "",
+                "min_players": ug.game.min_players,
+                "max_players": ug.game.max_players,
+                "liked": ug.liked,
+                "disliked": ug.disliked,
+                "is_installed": ug.is_installed, # Take installed status from the first encountered ownership
+                "cover_url": ug.game.cover_url,
+                "description": ug.game.description,
+                "metacritic": ug.game.metacritic,
+                "multiplayer_info": ug.game.multiplayer_info,
+                "release_date": ug.game.release_date,
+                "is_game_pass": False # Initialize as False, set to True if a 'game_pass' source is found
+            }
+        # Check if this specific UserGame entry is from Game Pass
+        if ug.source == "game_pass":
+            consolidated_games[game_id]["is_game_pass"] = True
+        consolidated_games[game_id]["sources"].append(ug.source)
+
+    games_list = list(consolidated_games.values())
     return jsonify(games_list)
 
 @app.route('/api/game_details/<int:game_id>')
-def get_game_details_api(game_id):
+async def get_game_details_api(game_id):
     """
     Fetch detailed information for a single game, updating from Steam if needed.
 
@@ -66,16 +95,10 @@ def get_game_details_api(game_id):
     if not game:
         return jsonify({"error": "Game not found"}), 404
 
-    if (not game.description or not game.release_date) and game.steam_appid:
-        steam_data = fetch_steam_details(game.steam_appid)
-        if steam_data:
-            db_manager.add_game(
-                name=steam_data.get('name', game.name),
-                steam_appid=game.steam_appid,
-                description=steam_data.get('short_description'),
-                release_date=steam_data.get('release_date', {}).get('date')
-            )
-            game = db_manager.get_game_details(game_id)
+    if (not game.description or not game.release_date or not game.metacritic) and game.steam_appid:
+        # This logic is now handled by db_manager.add_game when the game is initially added or updated.
+        # We should just rely on the data already in the Game model.
+        pass
 
     # Get the list of owners directly with usernames from our updated function
     owners_info = db_manager.get_game_owners_with_platforms(game.id)
@@ -89,21 +112,34 @@ def get_game_details_api(game_id):
         "name": game.name,
         "steam_appid": game.steam_appid,
         "description": game.description,
-        "metacritic": "Not available",
+        "metacritic": game.metacritic or "Not available",
+        "multiplayer_info": game.multiplayer_info,
         "owners": owner_list
     }
     return jsonify(details)
 
 # --- Game Management API Routes ---
-@app.route('/api/manage/remove_game', methods=['POST'])
-def remove_game_api():
-    """API endpoint to remove a game from a user's library."""
+
+
+@app.route('/api/manage/toggle_owned', methods=['POST'])
+def toggle_owned_api():
+    """API endpoint to toggle the 'owned' status of a user's game."""
     data = request.json
     user_db = db_manager.get_user_by_discord_id(data.get('discord_id'))
     if not user_db:
         return jsonify({"error": "User not found"}), 404
-    db_manager.remove_user_game(user_db.id, data.get('game_id'))
-    return jsonify({"success": True, "message": "Game removed."})
+
+    game_id = data.get('game_id')
+    ownership = db_manager.get_user_game_ownership(user_db.id, game_id)
+
+    if ownership:
+        db_manager.remove_user_game(user_db.id, game_id)
+        return jsonify({"success": True, "owned": False})
+    else:
+        # NOTE: When adding a game back, we don't know the original platform.
+        # Defaulting to 'PC'. This is a limitation of the current design.
+        db_manager.add_user_game(user_db.id, game_id, "PC")
+        return jsonify({"success": True, "owned": True})
 
 @app.route('/api/manage/toggle_installed', methods=['POST'])
 def toggle_installed_api():
@@ -126,7 +162,7 @@ def like_game_api():
     user_db = db_manager.get_user_by_discord_id(data.get('discord_id'))
     if not user_db:
         return jsonify({"error": "User not found"}), 404
-    
+
     ownership = db_manager.get_user_game_ownership(user_db.id, data.get('game_id'))
     if not ownership:
         return jsonify({"error": "Ownership record not found"}), 404

@@ -7,25 +7,32 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from data import db_manager
 from data.models import User, db
-from steam.steam_api import get_owned_games
+from steam.steam_api import get_owned_games, get_game_details
 from utils.logging import logger
 
 
 async def fetch_and_store_games_for_all_users():
     """Fetch and store games for all users with a Steam ID."""
+    logger.info("Starting fetch_and_store_games_for_all_users...")
     users = db_manager.get_all_users()
+    if not users:
+        logger.info("No users found in the database to fetch games for.")
+        return
     for user in users:
         if user.steam_id:
-            logger.info(f"Fetching games for user {user.id} (Steam ID: {user.steam_id})")
+            logger.info(f"Fetching games for user {user.username} (Discord ID: {user.discord_id}, Steam ID: {user.steam_id})")
             await fetch_and_store_games(user.id, user.steam_id)
+        else:
+            logger.info(f"User {user.username} (Discord ID: {user.discord_id}) does not have a Steam ID set.")
 
 
 async def fetch_and_store_games(user_id, steam_id):
     """Fetch games for a user and store them in the database."""
     games = get_owned_games(steam_id)
     if not games:
-        logger.warning(f"Could not retrieve games for user {user_id} (Steam ID: {steam_id})")
+        logger.warning(f"Could not retrieve games for user {user_id} (Steam ID: {steam_id}). No games returned from Steam API.")
         return
+    logger.info(f"Retrieved {len(games)} games from Steam API for user {user_id} (Steam ID: {steam_id}).")
 
     for game_data in games:
         try:
@@ -33,31 +40,19 @@ async def fetch_and_store_games(user_id, steam_id):
                 # Fetch detailed game info
                 details = get_game_details(game_data['appid'])
 
-                # Extract relevant details, defaulting to None if not found
-                name = details.get('name', game_data['name']) if details else game_data['name']
-                tags = ",".join([g['description'] for g in details.get('genres', [])]) if details and details.get('genres') else None
-                release_date = details.get('release_date', {}).get('date') if details and details.get('release_date') else None
-                min_players = None # Steam API does not directly provide min/max players in appdetails
-                max_players = None # You might need to scrape or use another API for this
-                description = details.get('short_description') if details else None
-
                 # Add or get the game in the global Game table
-                game_id = db_manager.add_game(
-                    name=name,
-                    steam_appid=str(game_data['appid']),
-                    tags=tags,
-                    min_players=min_players,
-                    max_players=max_players,
-                    release_date=release_date,
-                    description=description
+                game_name = details.get('name', game_data['name']) if details else game_data['name']
+                game_id = await db_manager.add_game(
+                    title=game_name,
+                    steam_appid=str(game_data['appid'])
                 )
                 if game_id is None:
                     logger.error(f"Failed to add or retrieve game {name} to the global game list.")
                     continue
 
                 # Link the game to the user's library
-                db_manager.add_user_game(user_id, game_id, 'PC')
-                logger.info(f"Stored game {name} for user {user_id}.")
+                db_manager.add_user_game(user_id, game_id, 'steam')
+                logger.info(f"Stored game {name} (ID: {game_id}) for user {user_id}.")
         except Exception as e:
             logger.error(f"Error storing game {game_data.get('name', 'Unknown')} for user {user_id}: {e}")
 

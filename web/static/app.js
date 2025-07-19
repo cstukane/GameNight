@@ -61,7 +61,15 @@ document.addEventListener('DOMContentLoaded', () => {
     function populateFilters(games) {
         const allSources = new Set();
         games.forEach(game => {
-            game.sources.forEach(source => allSources.add(source));
+            game.sources.forEach(source => {
+                let standardizedSource = source;
+                if (source === 'Game_Pass') {
+                    standardizedSource = 'Game Pass';
+                } else if (source === 'Pc') {
+                    standardizedSource = 'PC';
+                }
+                allSources.add(standardizedSource);
+            });
         });
         const platforms = Array.from(allSources).sort();
         platformFilter.innerHTML = '<option value="">All Platforms</option>';
@@ -78,14 +86,22 @@ document.addEventListener('DOMContentLoaded', () => {
         const nameQuery = nameFilterInput.value.toLowerCase();
         const platformQuery = platformFilter.value;
         const playersQuery = parseInt(playersFilter.value, 10);
-        const gamepassChecked = gamepassFilter.checked;
+        const gamepassQuery = gamepassFilter.value;
 
         const filteredGames = allGames.filter(game => {
             const nameMatch = game.name.toLowerCase().includes(nameQuery);
             // Check if the game's sources include the selected platformQuery
-            const platformMatch = !platformQuery || game.sources.includes(platformQuery);
+            const platformMatch = !platformQuery || game.sources.map(s => {
+                if (s === 'Game_Pass') return 'Game Pass';
+                if (s === 'Pc') return 'PC';
+                return s;
+            }).includes(platformQuery);
             const playersMatch = !playersQuery || (game.max_players >= playersQuery);
-            const gamepassMatch = !gamepassChecked || game.is_game_pass;
+            const gamepassMatch = 
+                gamepassQuery === 'include' ? true :
+                gamepassQuery === 'only' ? game.is_game_pass :
+                gamepassQuery === 'exclude' ? !game.is_game_pass :
+                true;
             return nameMatch && platformMatch && playersMatch && gamepassMatch;
         });
         renderGames(filteredGames);
@@ -125,12 +141,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         <p>Loading...</p>
                         ${isCurrentUserLibrary ? `
                             <div class="game-management-buttons">
-                                <button class="toggle-owned-button" data-game-id="${game.id}">
-                                    ${game.sources.length > 0 ? 'Mark as Un-Owned' : 'Mark as Owned'}
-                                </button>
                                 <button class="toggle-installed-button" data-game-id="${game.id}" ${game.sources.length === 0 ? 'disabled' : ''}>
-                                    ${game.is_installed ? 'Mark as Uninstalled' : 'Mark as Installed'}
+                                    ${game.is_installed ? 'Uninstalled' : 'Installed'}
                                 </button>
+                                <button class="delete-game-button" data-game-id="${game.id}">Delete</button>
                             </div>
                         ` : ''}
                     </div>
@@ -147,14 +161,6 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             if (isCurrentUserLibrary) {
-                const toggleOwnedButton = cardContainer.querySelector('.toggle-owned-button');
-                if (toggleOwnedButton) {
-                    toggleOwnedButton.addEventListener('click', (event) => {
-                        event.stopPropagation(); // Prevent card flip
-                        handleToggleOwned(game.id);
-                    });
-                }
-
                 const toggleInstalledButton = cardContainer.querySelector('.toggle-installed-button');
                 if (toggleInstalledButton) {
                     toggleInstalledButton.addEventListener('click', (event) => {
@@ -176,6 +182,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     dislikeButton.addEventListener('click', (event) => {
                         event.stopPropagation(); // Prevent card flip
                         handleDislikeGame(game.id, dislikeButton, cardContainer.querySelector('.like-button'));
+                    });
+                }
+
+                const deleteButton = cardContainer.querySelector('.delete-game-button');
+                if (deleteButton) {
+                    deleteButton.addEventListener('click', (event) => {
+                        event.stopPropagation(); // Prevent card flip
+                        handleDeleteGame(game.id, game.sources);
                     });
                 }
             }
@@ -214,6 +228,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     ${sourcesHtml}
                     <div id="owners-list"></div> <!-- Placeholder for owners -->
                 </div>
+                ${isCurrentUserLibrary ? `
+                    <div class="game-management-buttons">
+                        <button class="toggle-installed-button" data-game-id="${game.id}" ${game.sources.length === 0 ? 'disabled' : ''}>
+                            ${game.is_installed ? 'Uninstalled' : 'Installed'}
+                        </button>
+                        <button class="delete-game-button" data-game-id="${game.id}">Delete</button>
+                    </div>
+                ` : ''}
             `;
 
             // Fetch owners separately
@@ -225,32 +247,146 @@ document.addEventListener('DOMContentLoaded', () => {
                         ? `<h4>Also Owned By:</h4><ul>${otherOwners.map(o => `<li>${o.username}</li>`).join('')}</ul>`
                         : '';
                     cardElement.querySelector('#owners-list').innerHTML = ownersHtml;
+
+                    // Re-attach event listeners for the newly rendered buttons on the back of the card
+                    if (isCurrentUserLibrary) {
+                        const toggleInstalledButton = backOfCard.querySelector('.toggle-installed-button');
+                        if (toggleInstalledButton) {
+                            toggleInstalledButton.addEventListener('click', (event) => {
+                                event.stopPropagation(); // Prevent card flip
+                                handleToggleInstalled(game.id);
+                            });
+                        }
+
+                        const deleteButton = backOfCard.querySelector('.delete-game-button');
+                        if (deleteButton) {
+                            deleteButton.addEventListener('click', (event) => {
+                                event.stopPropagation(); // Prevent card flip
+                                handleDeleteGame(game.id, game.sources);
+                            });
+                        }
+                    }
                 });
         }
     }
 
     // --- New Game Management Functions ---
-    async function handleToggleOwned(gameId) {
+
+    // Delete Game Modal Elements
+    const deleteConfirmModal = document.getElementById('deleteConfirmModal');
+    const deleteConfirmMessage = document.getElementById('deleteConfirmMessage');
+    const deleteSourceSelect = document.getElementById('deleteSourceSelect');
+    const confirmDeleteButton = document.getElementById('confirmDeleteButton');
+    const cancelDeleteButton = document.getElementById('cancelDeleteButton');
+    const deleteModalCloseButton = deleteConfirmModal.querySelector('.close-button');
+
+    // Toast Notification Element
+    const toastElement = document.getElementById('toast');
+
+    let gameToDelete = null; // To store the game ID and sources for deletion
+
+    function showToast(message, isError = false) {
+        toastElement.textContent = message;
+        toastElement.className = 'toast show';
+        if (isError) {
+            toastElement.style.backgroundColor = '#f44336'; // Red for error
+        } else {
+            toastElement.style.backgroundColor = '#333'; // Default for success/info
+        }
+        setTimeout(() => {
+            toastElement.className = toastElement.className.replace("show", "");
+        }, 3000); // Hide after 3 seconds
+    }
+
+    async function handleDeleteGame(gameId, sources) {
+        console.log('Delete button clicked for game:', gameId, 'with sources:', sources);
+        gameToDelete = { gameId, sources };
+        
+        // Prioritize Steam if it exists and there are other sources
+        const steamSource = sources.find(s => s === 'Steam');
+        const otherSources = sources.filter(s => s !== 'Steam');
+
+        if (steamSource && otherSources.length > 0) {
+            // If Steam exists and there are other sources, prompt for confirmation
+            deleteConfirmMessage.textContent = `This game is owned on Steam and other platforms. Do you want to remove the Steam version or choose another?`;
+            deleteSourceSelect.innerHTML = '';
+            // Add Steam first
+            deleteSourceSelect.add(new Option('Steam', 'Steam'));
+            // Add other sources, excluding Steam
+            otherSources.forEach(source => {
+                deleteSourceSelect.add(new Option(source.replace('_', ' '), source));
+            });
+            deleteSourceSelect.style.display = 'block'; // Show dropdown
+        } else if (sources.length > 1) {
+            // If multiple sources but no Steam priority, let user choose
+            deleteConfirmMessage.textContent = `This game is owned on multiple platforms. Which version do you want to remove?`;
+            deleteSourceSelect.innerHTML = '';
+            sources.forEach(source => {
+                deleteSourceSelect.add(new Option(source.replace('_', ' '), source));
+            });
+            deleteSourceSelect.style.display = 'block'; // Show dropdown
+        } else if (sources.length === 1) {
+            // If only one source, confirm directly
+            deleteConfirmMessage.textContent = `Are you sure you want to remove this game from your library? (Source: ${sources[0].replace('_', ' ')})`;
+            deleteSourceSelect.style.display = 'none'; // Hide dropdown
+        } else {
+            // Should not happen if button is only shown for owned games, but as a fallback
+            alert('No source found for this game. Cannot delete.');
+            return;
+        }
+        deleteConfirmModal.style.display = 'block';
+    }
+
+    confirmDeleteButton.addEventListener('click', async () => {
+        const { gameId, sources } = gameToDelete;
+        let sourceToRemove = null;
+
+        if (sources.length > 1) {
+            sourceToRemove = deleteSourceSelect.value;
+        } else if (sources.length === 1) {
+            sourceToRemove = sources[0];
+        }
+
+        if (!sourceToRemove) {
+            alert('Please select a source to remove.');
+            return;
+        }
+
         try {
-            const response = await fetch('/api/manage/toggle_owned', {
+            const response = await fetch('/api/manage/delete_game', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ discord_id: currentDiscordId, game_id: gameId }),
+                body: JSON.stringify({ discord_id: currentDiscordId, game_id: gameId, source: sourceToRemove }),
             });
             const result = await response.json();
             if (result.success) {
-                alert('Game ownership status updated!');
-                loadUserLibrary(currentDiscordId); // Reload library to reflect changes
+                showToast('Game removed successfully!');
+                loadUserLibrary(currentDiscordId); // Reload library
+                deleteConfirmModal.style.display = 'none';
             } else {
-                alert('Failed to update ownership status: ' + result.error);
+                showToast('Failed to remove game: ' + result.error, true);
             }
         } catch (error) {
-            console.error('Error toggling ownership status:', error);
-            alert('An error occurred while updating ownership status.');
+            console.error('Error removing game:', error);
+            showToast('An error occurred while removing the game.', true);
         }
-    }
+    });
+
+    cancelDeleteButton.addEventListener('click', () => {
+        deleteConfirmModal.style.display = 'none';
+    });
+
+    deleteModalCloseButton.addEventListener('click', () => {
+        deleteConfirmModal.style.display = 'none';
+    });
+
+    window.addEventListener('click', (event) => {
+        if (event.target === deleteConfirmModal) {
+            deleteConfirmModal.style.display = 'none';
+        }
+    });
 
     async function handleToggleInstalled(gameId) {
         try {

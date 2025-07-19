@@ -1,5 +1,5 @@
-from peewee import CharField
 from data.models import GamePassGame, db
+
 
 def migrate():
     # migrator = db.migrator

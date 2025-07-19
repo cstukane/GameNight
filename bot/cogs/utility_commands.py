@@ -14,9 +14,9 @@ from xbox.webapi.common.exceptions import AuthenticationException
 from data import db_manager
 from data.models import VoiceActivity
 from steam.fetch_library import fetch_and_store_games
+from utils.config import XBOX_CLIENT_ID, XBOX_CLIENT_SECRET, XBOX_REDIRECT_URI
 from utils.errors import UserNotFoundError
 from utils.logging import logger
-from utils.config import XBOX_CLIENT_ID, XBOX_CLIENT_SECRET, XBOX_REDIRECT_URI
 
 
 class XboxLinkModal(discord.ui.Modal, title="Submit Xbox URL"):
@@ -149,7 +149,7 @@ class UtilityCommands(commands.Cog):
             )
             await interaction.followup.send(help_message, ephemeral=True)
             return
-        
+
         db_manager.add_user(str(interaction.user.id), interaction.user.display_name)
         user_db = db_manager.get_user_by_discord_id(str(interaction.user.id))
         await fetch_and_store_games(user_db, steam_id)
@@ -199,31 +199,52 @@ class UtilityCommands(commands.Cog):
     async def help(self, interaction: discord.Interaction):
         """Show a help message with a list of commands."""
         await interaction.response.defer(ephemeral=True)
+
         embed = discord.Embed(
-            title="Game Night Bot Help", description="Here's how you can use me:", color=discord.Color.blue()
+            title="Game Night Bot Help",
+            description="Here's how you can use me:",
+            color=discord.Color.blue()
         )
-        general_commands_desc = (
-            "**/ping** - Check if the bot is online.\n"
-            "**/profile `[user]`** - View a user's profile and game library link.\n"
-            "**/set_steam_id `<steam_id>`** - Link your Steam account.\n"
-            "**/link_xbox** - Link your Xbox account.\n"
-            "**/set_gamepass_status `<True/False>`** - Tell the bot if you have Game Pass.\n"
-            "**/set_reminder_offset `<minutes>`** - Set your preferred reminder time."
-        )
-        embed.add_field(name="General & Profile", value=general_commands_desc, inline=False)
-        game_commands_desc = (
-            "**/add_game** - Manually add a game to your library.\n"
-            "**/manage_games** - Manage ownership and installed status of your games.\n"
-            "**/view_library `[user]`** - Get a link to a user's web library."
-        )
-        embed.add_field(name="Game Management", value=game_commands_desc, inline=False)
-        gamenight_commands_desc = (
-            "**/next_game_night `<date>` `<time>`** - Schedule a new game night.\n"
-            "**/set_weekly_availability** - Set your recurring available days."
-        )
-        embed.add_field(name="Game Night Organization", value=gamenight_commands_desc, inline=False)
+
+        # Get all commands from the bot's command tree
+        all_commands = self.bot.tree.get_commands()
+
+        # Categorize commands
+        categorized_commands = {
+            "General & Profile": [],
+            "Game Management": [],
+            "Game Night Organization": [],
+            "Admin Commands": []
+        }
+
+        for command in all_commands:
+            # Skip commands that are not visible or are subcommands
+            if command.parent or command.name == "help":
+                continue
+
+            command_info = f"**/{command.name}** - {command.description}"
+
+            # Simple categorization based on command name or cog
+            if command.name in ["ping", "profile", "set_steam_id", "link_xbox", "set_gamepass_status", "set_reminder_offset", "wrapped_discord", "wrapped_history", "set_voice_notifications"]:
+                categorized_commands["General & Profile"].append(command_info)
+            elif command.name in ["add_game", "manage_games", "view_library", "suggest_games"]:
+                categorized_commands["Game Management"].append(command_info)
+            elif command.name in ["setup_game_night", "set_game_night_availability", "set_weekly_availability"]:
+                categorized_commands["Game Night Organization"].append(command_info)
+            elif command.name in ["set_main_channel", "set_voice_notification_channel", "set_availability"]: # set_availability is configure_weekly_slots
+                categorized_commands["Admin Commands"].append(command_info)
+            else:
+                # Fallback for any uncategorized commands
+                categorized_commands["General & Profile"].append(command_info)
+
+
+        # Add fields to the embed for each category
+        for category, commands_list in categorized_commands.items():
+            if commands_list:
+                embed.add_field(name=category, value="\n".join(commands_list), inline=False)
+
         embed.set_footer(text="Find your Steam ID at steamid.io.")
-        await interaction.followup.send(embed=embed)
+        await interaction.followup.send(embed=embed, ephemeral=True)
 
     @app_commands.command(name="set_weekly_availability", description="Set your recurring weekly availability for game nights.")
     @app_commands.describe(
@@ -290,6 +311,16 @@ class UtilityCommands(commands.Cog):
             await interaction.edit_original_response(
                 content="Something went wrong during the library sync. Please try again later."
             )
+
+    @app_commands.command(name="set_voice_notifications", description="Toggle voice activity notifications for yourself.")
+    @app_commands.describe(enabled="True to enable, False to disable.")
+    async def set_voice_notifications(self, interaction: discord.Interaction, enabled: bool):
+        """Toggle whether the user receives voice activity notifications."""
+        await interaction.response.defer(ephemeral=True)
+        user_db = db_manager.add_user(str(interaction.user.id), interaction.user.display_name)
+        db_manager.set_user_voice_notifications(user_db.id, enabled)
+        status = "enabled" if enabled else "disabled"
+        await interaction.followup.send(f"Voice activity notifications have been {status} for you.", ephemeral=True)
 
     @app_commands.command(name="set_reminder_offset", description="Set your default game night reminder offset.")
     @app_commands.describe(
@@ -370,6 +401,18 @@ class UtilityCommands(commands.Cog):
             if len(lines) > 10:
                 embed.set_footer(text=f"Showing 10 of {len(lines)} attended game nights.")
         await interaction.followup.send(embed=embed)
+
+    @app_commands.command(name="set_voice_notification_channel", description="Sets the channel for voice activity notifications.")
+    @app_commands.describe(channel="The channel to send voice activity notifications to.")
+    @app_commands.default_permissions(manage_guild=True)
+    async def set_voice_notification_channel(self, interaction: discord.Interaction, channel: discord.TextChannel):
+        """Set the guild's voice activity notification channel."""
+        await interaction.response.defer(ephemeral=True)
+        if not interaction.guild:
+            await interaction.followup.send("This command can only be used in a server.", ephemeral=True)
+            return
+        db_manager.set_guild_voice_notification_channel(str(interaction.guild.id), str(channel.id))
+        await interaction.followup.send(f"Voice activity notifications will now be sent to {channel.mention}.")
 
     @app_commands.command(name="set_main_channel", description="Sets the main channel for polls and announcements.")
     @app_commands.describe(channel="The channel to set as the main channel.")

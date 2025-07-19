@@ -1,8 +1,8 @@
 # enrich_game_database.py
 import asyncio
+import json
 import os
 import sys
-import json
 from datetime import datetime
 
 # This is crucial for making sure the script can find your other project files

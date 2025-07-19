@@ -10,20 +10,24 @@
     <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400&display=swap" rel="stylesheet">
 </head>
 <body>
-    <header>
-        <h1 id="library-title">Loading Library...</h1>
-        <div class="header-content">
-            <input type="text" id="name-filter" placeholder="Filter by Name">
-            <div class="filters">
-                <select id="platform-filter"></select>
-                <select id="players-filter"></select>
-                <label for="gamepass-filter" class="checkbox-label">
-                    <input type="checkbox" id="gamepass-filter"> Game Pass
-                </label>
-                <select id="user-switcher"></select>
+    <div id="fixed-header">
+        <header>
+            <h1 id="library-title">Loading Library...</h1>
+            <div class="header-content">
+                <input type="text" id="name-filter" placeholder="Filter by Name">
+                <div class="filters">
+                    <select id="platform-filter"></select>
+                    <select id="players-filter"></select>
+                    <select id="gamepass-filter">
+                        <option value="include">Include Game Pass</option>
+                        <option value="only">Only Game Pass</option>
+                        <option value="exclude">Exclude Game Pass</option>
+                    </select>
+                    <select id="user-switcher"></select>
+                </div>
             </div>
-        </div>
-    </header>
+        </header>
+    </div>
 
     <main id="game-grid">
         <!-- The JavaScript will create the new flip cards here -->
@@ -36,5 +40,42 @@
         const VIEWER_ID = "{{ viewer_id }}";
     </script>
     <script src="/static/app.js"></script>
+
+    <!-- Source Selection Modal -->
+    <div id="sourceModal" class="modal">
+        <div class="modal-content">
+            <span class="close-button">&times;</span>
+            <h2>Select Game Source</h2>
+            <p>Where do you own this game?</p>
+            <select id="gameSourceSelect">
+                <option value="Pc">PC</option>
+                <option value="Steam">Steam</option>
+                <option value="Xbox">Xbox</option>
+                <option value="PlayStation">PlayStation</option>
+                <option value="Switch">Switch</option>
+                <option value="Game_Pass">Game Pass</option>
+            </select>
+            <button id="confirmSourceButton">Confirm</button>
+        </div>
+    </div>
+
+    <button id="scroll-to-top-btn">↑</button>
+
+    <!-- Delete Confirmation Modal -->
+    <div id="deleteConfirmModal" class="modal">
+        <div class="modal-content">
+            <span class="close-button">&times;</span>
+            <h2>Confirm Deletion</h2>
+            <p id="deleteConfirmMessage"></p>
+            <select id="deleteSourceSelect" style="display: none;"></select>
+            <div class="modal-actions">
+                <button id="confirmDeleteButton">Confirm</button>
+                <button id="cancelDeleteButton">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast"></div>
 </body>
 </html>

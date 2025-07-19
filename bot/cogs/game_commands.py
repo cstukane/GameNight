@@ -8,12 +8,9 @@ from discord.ext import commands
 
 from bot.game_suggester import suggest_games
 from data import db_manager
+from steam.igdb_api import igdb_api
 from utils.errors import GameNightError, GameNotFoundError, UserNotFoundError
 from utils.logging import logger
-from steam.igdb_api import igdb_api
-import json
-
-ALLOWED_SOURCES = ["steam", "xbox_achievement", "game_pass", "manual"]
 
 
 class GameSuggestionView(discord.ui.View):
@@ -59,15 +56,22 @@ class GameSuggestionView(discord.ui.View):
                 return False
             user_game_ownership = db_manager.get_user_game_ownership(user_db.id, game.igdb_id)
             if user_game_ownership and game:
-                if user_game_ownership.source == "steam" and game.steam_appid:
+                if user_game_ownership.source == "Steam" and game.steam_appid:
                     message = f"Click here to launch **{game.title}**: <steam://run/{game.steam_appid}>"
-                    await interaction.followup.send(message, ephemeral=True)
+                elif user_game_ownership.source == "Xbox":
+                    message = f"You own **{game.title}** on Xbox. Please launch it from your Xbox console or the Xbox app on PC."
+                elif user_game_ownership.source == "PlayStation":
+                    message = f"You own **{game.title}** on PlayStation. Please launch it directly from your PlayStation console."
+                elif user_game_ownership.source == "Switch":
+                    message = f"You own **{game.title}** on Nintendo Switch. Please launch it directly from your Nintendo Switch console."
+                elif user_game_ownership.source == "PC" or user_game_ownership.source == "manual":
+                    message = f"You own **{game.title}** on PC. Please launch it from your desktop shortcut or game launcher."
                 else:
                     message = (
                         f"You own **{game.title}** on {user_game_ownership.source}. "
                         "Please launch it from the app or console."
                     )
-                    await interaction.followup.send(message, ephemeral=True)
+                await interaction.followup.send(message, ephemeral=True)
             else:
                 await interaction.followup.send(f"You don't have **{game.title}** in your library.", ephemeral=True)
             return False
@@ -198,46 +202,104 @@ class GameCommands(commands.Cog):
         view = GameSuggestionView(suggested_games)
         await interaction.followup.send(embed=embed, view=view)
 
-    @app_commands.command(name="add_game", description="Manually adds a game you own to your library.")
+    # @app_commands.command(name="add_game", description="Manually adds a game you own to your library.")
+    # @app_commands.describe(name="The name of the game.", source="The platform you own the game on.")
+    # async def add_game(self, interaction: discord.Interaction, name: int, source: str):
+    #     """Manually add a game to your library."""
+    #     await interaction.response.defer(ephemeral=True)
+    #     igdb_id = name # The 'name' is now the IGDB ID from the autocomplete choice
+
+    #     user_db_id = db_manager.add_user(str(interaction.user.id), interaction.user.display_name)
+    #     game_db_id = await db_manager.add_game(igdb_id=igdb_id)
+
+    #     if not game_db_id:
+    #         raise GameNotFoundError(f"Could not find or add game with IGDB ID: {igdb_id}")
+
+    #     # Retrieve the game object to get the potentially updated title from IGDB
+    #     game_obj = db_manager.get_game_by_igdb_id(game_db_id)
+    #     game_title = game_obj.title if game_obj else 'Unknown Game'
+    #     db_manager.add_user_game(user_db_id, game_db_id, source)
+    #     success_msg = f"Successfully added **{game_title}** from **{source}** to your library!"
+    #     await interaction.followup.send(success_msg)
+
+    @app_commands.command(name="add_games", description="Adds multiple games to your library for a single platform.")
     @app_commands.describe(
-        name="The name of the game.",
-        source="The source you own the game on (e.g., 'steam', 'xbox_achievement', 'game_pass', 'manual').",
-        igdb_id="The IGDB ID of the game (if known).",
-        steam_appid="The Steam App ID of the game (if applicable).",
-        min_players="Minimum number of players.",
-        max_players="Maximum number of players."
+        platform="The platform you own these games on.",
+        game_1="The first game to add to your library.",
+        game_2="The second game to add to your library.",
+        game_3="The third game to add to your library.",
+        game_4="The fourth game to add to your library.",
+        game_5="The fifth game to add to your library."
     )
-    async def add_game(
-        self, interaction: discord.Interaction, name: str, source: str,
-        igdb_id: int = None, steam_appid: int = None, min_players: int = None, max_players: int = None
+    async def add_games(
+        self,
+        interaction: discord.Interaction,
+        platform: str,
+        game_1: int,
+        game_2: int = None,
+        game_3: int = None,
+        game_4: int = None,
+        game_5: int = None,
     ):
-        """Manually add a game to your library."""
         await interaction.response.defer(ephemeral=True)
-        if source not in ALLOWED_SOURCES:
-            error_msg = f"Invalid source. Choose from: {', '.join(ALLOWED_SOURCES)}"
-            raise GameNightError(error_msg)
+
+        game_ids = [g for g in [game_1, game_2, game_3, game_4, game_5] if g is not None]
 
         user_db_id = db_manager.add_user(str(interaction.user.id), interaction.user.display_name)
-        game_db_id = await db_manager.add_game(
-            title=name, igdb_id=igdb_id, steam_appid=steam_appid,
-            min_players=min_players, max_players=max_players
-        )
-        # Retrieve the game object to get the potentially updated title from IGDB
-        game_obj = db_manager.get_game_by_igdb_id(game_db_id)
-        game_title = game_obj.title if game_obj else name
-        db_manager.add_user_game(user_db_id, game_db_id, source)
-        success_msg = f"Successfully added **{game_title}** from **{source}** to your library!"
-        await interaction.followup.send(success_msg)
 
-    @add_game.autocomplete('name')
+        added_game_names = []
+        for igdb_id in game_ids:
+            game_db_id = await db_manager.add_game(igdb_id=igdb_id)
+            if game_db_id:
+                db_manager.add_user_game(user_db_id, game_db_id, platform)
+                game_obj = db_manager.get_game_by_igdb_id(igdb_id)
+                if game_obj:
+                    added_game_names.append(game_obj.title)
+
+        if added_game_names:
+            confirmation_msg = f"Successfully added the following games to your library: {', '.join(added_game_names)} on {platform}!"
+        else:
+            confirmation_msg = "No games were added."
+
+        await interaction.followup.send(confirmation_msg)
+
+    # @add_games.autocomplete('name')
+    @add_games.autocomplete('game_1')
+    @add_games.autocomplete('game_2')
+    @add_games.autocomplete('game_3')
+    @add_games.autocomplete('game_4')
+    @add_games.autocomplete('game_5')
     async def game_autocomplete(self, interaction: discord.Interaction, current: str):
-        """Autocomplete for game names."""
-        return [app_commands.Choice(name=g, value=g) for g in db_manager.search_games_by_name(current)][:25]
+        """Autocomplete for game names from local DB and IGDB."""
+        if not current:
+            return []
+        try:
+            # Hybrid search: local first, then IGDB
+            local_games = db_manager.search_games_by_name(current)
+            choices = {game.igdb_id: app_commands.Choice(name=game.title, value=game.igdb_id) for game in local_games}
 
-    @add_game.autocomplete('source')
+            # Supplement with IGDB search, avoiding duplicates
+            if len(choices) < 25:
+                igdb_games = await igdb_api.search_games(current)
+                for game in igdb_games:
+                    if game['id'] not in choices:
+                        choices[game['id']] = app_commands.Choice(name=game['name'], value=game['id'])
+                    if len(choices) >= 25:
+                        break
+
+            return list(choices.values())[:25]
+        except Exception as e:
+            logger.error(f"Error in game_autocomplete: {e}")
+            return []
+
+    # @add_game.autocomplete('source')
+    @add_games.autocomplete('platform')
     async def source_autocomplete(self, interaction: discord.Interaction, current: str):
         """Autocomplete for source names."""
-        return [app_commands.Choice(name=s, value=s) for s in ALLOWED_SOURCES if current.lower() in s.lower()]
+        sources = ["PC", "Steam", "Xbox", "PlayStation", "Switch"]
+        return [app_commands.Choice(name=s, value=s) for s in sources if current.lower() in s.lower()]
+
+
 
 
 async def setup(bot):

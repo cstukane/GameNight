@@ -10,7 +10,6 @@ from flask import Flask, jsonify, render_template, request, send_file
 from PIL import Image, ImageDraw, ImageFont
 
 from data import db_manager
-from steam.steam_api import get_game_details as fetch_steam_details
 from utils.logging import logger
 
 app = Flask(__name__)
@@ -45,13 +44,14 @@ def get_all_users_api():
 @app.route('/api/games/<discord_id>')
 def get_user_games(discord_id):
     """Fetch all games owned by a specific user."""
+    gamepass_filter = request.args.get('gamepass_filter', 'include')
     logger.info(f"Attempting to fetch games for Discord ID: {discord_id}")
     user_db = db_manager.get_user_by_discord_id(discord_id)
     if not user_db:
         logger.warning(f"User with Discord ID {discord_id} not found in database.")
         return jsonify({"error": "User not found"}), 404
     logger.info(f"Found user: {user_db.username} (DB ID: {user_db.id})")
-    user_games_data = db_manager.get_user_game_ownerships(user_db.id)
+    user_games_data = db_manager.get_user_game_ownerships(user_db.id, gamepass_filter=gamepass_filter)
     logger.info(f"Retrieved {len(user_games_data)} game ownership records for user {user_db.username}.")
     # Consolidate games by IGDB ID to handle multiple sources
     consolidated_games = {}
@@ -79,7 +79,17 @@ def get_user_games(discord_id):
         # Check if this specific UserGame entry is from Game Pass
         if ug.source == "game_pass":
             consolidated_games[game_id]["is_game_pass"] = True
-        consolidated_games[game_id]["sources"].append(ug.source)
+        # Normalize source names for display
+        normalized_source = ug.source # ug.source will now be uppercase from db_manager.py
+        if normalized_source == "STEAM":
+            normalized_source = "Steam"
+        elif normalized_source == "GAME_PASS":
+            normalized_source = "Game Pass"
+        elif normalized_source == "GAME_PASS":
+            normalized_source = "Game Pass"
+        elif normalized_source != "PC": # Keep "PC" as is, title case others
+            normalized_source = normalized_source.title()
+        consolidated_games[game_id]["sources"].append(normalized_source)
 
     games_list = list(consolidated_games.values())
     return jsonify(games_list)
@@ -130,15 +140,14 @@ def toggle_owned_api():
         return jsonify({"error": "User not found"}), 404
 
     game_id = data.get('game_id')
+    source = data.get('source', 'manual') # Default to 'manual' if not provided
     ownership = db_manager.get_user_game_ownership(user_db.id, game_id)
 
     if ownership:
         db_manager.remove_user_game(user_db.id, game_id)
         return jsonify({"success": True, "owned": False})
     else:
-        # NOTE: When adding a game back, we don't know the original platform.
-        # Defaulting to 'PC'. This is a limitation of the current design.
-        db_manager.add_user_game(user_db.id, game_id, "PC")
+        db_manager.add_user_game(user_db.id, game_id, source)
         return jsonify({"success": True, "owned": True})
 
 @app.route('/api/manage/toggle_installed', methods=['POST'])
@@ -186,6 +195,45 @@ def dislike_game_api():
     new_disliked_status = not ownership.disliked # Toggle logic
     db_manager.set_user_game_like_dislike_status(user_db.id, data.get('game_id'), False, new_disliked_status)
     return jsonify({"success": True, "liked": False, "disliked": new_disliked_status})
+
+@app.route('/api/manage/delete_game', methods=['POST'])
+def delete_game_api():
+    """API endpoint to delete a game from a user's library."""
+    data = request.json
+    user_discord_id = data.get('discord_id')
+    game_igdb_id = data.get('game_id')
+    source_to_remove = data.get('source')
+
+    if not user_discord_id or not game_igdb_id or not source_to_remove:
+        return jsonify({"error": "Missing discord_id, game_id, or source"}), 400
+
+    user_db = db_manager.get_user_by_discord_id(user_discord_id)
+    if not user_db:
+        return jsonify({"error": "User not found"}), 404
+
+    try:
+        db_manager.remove_user_game_by_source(user_db.id, game_igdb_id, source_to_remove)
+        return jsonify({"success": True, "message": "Game removed successfully"}), 200
+    except Exception as e:
+        logger.error(f"Error deleting game: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/gamepass/add', methods=['POST'])
+def add_game_pass_game_api():
+    """API endpoint to add a Game Pass game to the catalog."""
+    data = request.json
+    title = data.get('title')
+    microsoft_store_id = data.get('microsoft_store_id')
+
+    if not title or not microsoft_store_id:
+        return jsonify({"error": "Missing title or microsoft_store_id"}), 400
+
+    try:
+        db_manager.add_game_pass_game(title, microsoft_store_id)
+        return jsonify({"success": True, "message": "Game Pass game added/updated successfully"}), 200
+    except Exception as e:
+        logger.error(f"Error adding Game Pass game via API: {e}")
+        return jsonify({"error": str(e)}), 500
 
 # --- Image Generator Route ---
 @app.route('/api/placeholder/<path:text>')

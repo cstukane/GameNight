@@ -1,15 +1,13 @@
 # Standard library imports
 import json
-import logging
 import os
 from datetime import datetime, timedelta
-from icalendar import Calendar, Event
-from collections import defaultdict
 
 # Third-party imports
 import discord
 from discord import app_commands
 from discord.ext import commands
+from icalendar import Calendar, Event
 
 # Local application imports
 from bot import events, poll_manager, reminders
@@ -18,7 +16,6 @@ from data import db_manager
 from steam.steamgriddb_api import get_game_image
 from utils.errors import (
     GameNightError,
-    InvalidGameNightIDError,
     PollNotFoundError,
     UserNotFoundError,
 )
@@ -183,7 +180,7 @@ class GameNightCommands(commands.Cog):
         possible_close_times = [one_hour_before_game_night, default_poll_close_dt]
         if user_defined_poll_close_dt:
             possible_close_times.append(user_defined_poll_close_dt)
-            
+
         poll_close_dt = min(possible_close_times)
 
         # Ensure poll_close_dt is not in the past
@@ -228,33 +225,33 @@ class GameNightCommands(commands.Cog):
 
 
 
-    # @app_commands.command(name="set_game_night_availability", description="Set your availability for an upcoming game night.")
-    # @app_commands.describe(
-    #     game_night_id="The ID of the game night.",
-    #     status="Your availability status."
-    # )
-    # @app_commands.choices(status=[
-    #     app_commands.Choice(name="Attending", value="attending"),
-    #     app_commands.Choice(name="Maybe", value="maybe"),
-    #     app_commands.Choice(name="Not Attending", value="not_attending"),
-    # ])
-    # async def set_game_night_availability(self, interaction: discord.Interaction, game_night_id: int, status: str):
-    #     """Set a user's attendance status for a specific game night."""
-    #     await interaction.response.defer(ephemeral=True)
+    @app_commands.command(name="set_game_night_availability", description="Set your availability for an upcoming game night.")
+    @app_commands.describe(
+        game_night_id="The ID of the game night.",
+        status="Your availability status."
+    )
+    @app_commands.choices(status=[
+        app_commands.Choice(name="Attending", value="attending"),
+        app_commands.Choice(name="Maybe", value="maybe"),
+        app_commands.Choice(name="Not Attending", value="not_attending"),
+    ])
+    async def set_game_night_availability(self, interaction: discord.Interaction, game_night_id: int, status: str):
+        """Set a user's attendance status for a specific game night."""
+        await interaction.response.defer(ephemeral=True)
 
-    #     user_db_id = db_manager.add_user(str(interaction.user.id), interaction.user.display_name)
-    #     if user_db_id is None:
-    #         raise UserNotFoundError("There was an error finding you in the database.")
+        user_db_id = db_manager.add_user(str(interaction.user.id), interaction.user.display_name)
+        if user_db_id is None:
+            raise UserNotFoundError("There was an error finding you in the database.")
 
-    #     events.set_attendee_status(game_night_id, user_db_id, status)
+        events.set_attendee_status(game_night_id, user_db_id, status)
 
-    #     # If the user is attending, schedule a reminder
-    #     if status == "attending":
-    #         events.schedule_reminder(self.bot, user_db_id, game_night_id)
+        # If the user is attending, schedule a reminder
+        if status == "attending":
+            events.schedule_reminder(self.bot, user_db_id, game_night_id)
 
-    #     await interaction.followup.send(
-    #         f"Your availability for Game Night ID {game_night_id} has been set to **{status}**."
-    #     )
+        await interaction.followup.send(
+            f"Your availability for Game Night ID {game_night_id} has been set to **{status}**."
+        )
 
     @set_game_night_availability.autocomplete('game_night_id')
     async def game_night_autocomplete(self, interaction: discord.Interaction, current: str):

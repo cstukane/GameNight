@@ -33,9 +33,11 @@ This is a Discord bot designed to help organize game nights, manage game librari
     source venv/bin/activate  # On Windows: .\venv\Scripts\activate
     ```
 
-3.  **Install dependencies:**
+3.  **Install Node.js dependencies for Game Pass API:**
     ```bash
-    pip install -r requirements.txt
+    cd gamepass_api
+    npm install
+    cd ..
     ```
 
 4.  **Create a `.env` file:**

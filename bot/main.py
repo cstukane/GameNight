@@ -1,20 +1,16 @@
 import asyncio
 import os
 import sys
-from asyncio import subprocess
 
 # Add the project root to the Python path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import json
-import httpx
-from xbox.webapi.authentication.manager import SignedSession
-from data import db_manager
-
-
 import discord
+import httpx
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from discord.ext import commands
+
+from data import db_manager
 
 # from bot.game_pass_fetcher import fetch_game_pass_games  # Assuming this function exists
 from data.database import initialize_database
@@ -111,11 +107,33 @@ async def main():
     game_pass_catalog = db_manager.get_game_pass_catalog()
     if not game_pass_catalog:
         logger.info("Game Pass catalog is empty. Populating it now...")
-        # --- CHANGE IS HERE ---
-        # We set the 'cwd' (current working directory) to 'gamepass_api'
-        # so the Node.js script runs from the correct folder.
+
+        # Install Node.js dependencies first
+        logger.info("Installing Node.js dependencies for gamepass_api...")
+        install_process = await asyncio.create_subprocess_shell(
+            "npm install",
+            cwd="gamepass_api",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        install_stdout, install_stderr = await install_process.communicate()
+
+        if install_process.returncode == 0:
+            logger.info("Node.js dependencies installed successfully.")
+            if install_stdout:
+                logger.info(f"npm install output:\n{install_stdout.decode().strip()}")
+        else:
+            logger.error(f"Error installing Node.js dependencies: {install_stderr.decode().strip()}")
+            logger.error("Game Pass catalog population aborted due to dependency installation failure.")
+            # Continue without populating Game Pass if dependencies fail
+            # This might lead to further errors if the Node.js script relies on these.
+            # Consider exiting or raising an exception here in a production environment.
+            pass # Allow the bot to start even if this fails, but log the error
+
+        # Run the Node.js script to populate the catalog
+        logger.info("Running Node.js script to fetch Game Pass catalog...")
         process = await asyncio.create_subprocess_shell(
-            "node index.js",
+            "node ogindex.js",
             cwd="gamepass_api",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE

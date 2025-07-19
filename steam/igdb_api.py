@@ -1,9 +1,10 @@
 # steam/igdb_api.py
 
-import os
-import httpx # Use httpx for async requests
+import httpx  # Use httpx for async requests
+
 from utils.config import IGDB_CLIENT_ID, IGDB_CLIENT_SECRET
 from utils.logging import logger
+
 
 class IGDBAPI:
     """An ASYNCHRONOUS client for interacting with the IGDB API."""
@@ -22,7 +23,7 @@ class IGDBAPI:
         # This check prevents re-fetching the token on every single request
         if self.access_token:
             return self.access_token
-        
+
         params = {
             'client_id': self.client_id,
             'client_secret': self.client_secret,
@@ -34,7 +35,7 @@ class IGDBAPI:
                 response.raise_for_status()
                 token_data = response.json()
                 self.access_token = token_data['access_token']
-                
+
                 # Set up the headers once we have the token
                 self.headers = {
                     'Client-ID': self.client_id,
@@ -94,7 +95,7 @@ class IGDBAPI:
         batch_size = 200
         for i in range(0, len(external_ids), batch_size):
             batch = external_ids[i:i + batch_size]
-            
+
             # IGDB expects a comma-separated list of strings, like ("id1", "id2")
             formatted_ids = ", ".join([f'"{ext_id}"' for ext_id in batch])
 
@@ -104,15 +105,15 @@ class IGDBAPI:
                 f'where category = {category_id} & uid = ({formatted_ids}); '
                 f'limit 500;' # Max limit
             )
-            
+
             response = await self._make_request("external_games", query)
-            
+
             if response:
                 for item in response:
                     # The correct path to the ID is item['game']['id']
                     if "game" in item and "id" in item["game"]:
                         all_igdb_ids.add(item["game"]["id"])
-        
+
         return all_igdb_ids
 
     async def get_game_by_igdb_id(self, igdb_id: int):

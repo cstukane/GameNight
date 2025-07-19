@@ -7,7 +7,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from data import db_manager
 from data.models import User, db
-from steam.steam_api import get_owned_games, get_game_details
+from steam.steam_api import get_game_details, get_owned_games
 from utils.logging import logger
 
 
@@ -52,7 +52,7 @@ async def fetch_and_store_games(user_id, steam_id):
 
                 # Link the game to the user's library
                 db_manager.add_user_game(user_id, game_id, 'steam')
-                logger.info(f"Stored game {name} (ID: {game_id}) for user {user_id}.")
+                logger.info(f"Stored game {game_name} (ID: {game_id}) for user {user_id}.")
         except Exception as e:
             logger.error(f"Error storing game {game_data.get('name', 'Unknown')} for user {user_id}: {e}")
 

@@ -1,31 +1,28 @@
 # Standard library imports
+import asyncio
 import json
 import os
 from collections import defaultdict
 from datetime import datetime, timedelta
-import asyncio
 
 # Third-party imports
 import discord
 from discord.ext import commands, tasks
-from icalendar import Calendar, Event
+
+# --- NEW IMPORTS FOR XBOX ---
+from xbox.webapi.api.client import XboxLiveClient
+from xbox.webapi.api.provider.titlehub import TitleFields, TitlehubProvider
+from xbox.webapi.authentication.manager import SignedSession
 
 # Local application imports
 from bot import events, poll_manager, reminders
 from bot.game_suggester import suggest_games
 from data import db_manager
-from steam.steamgriddb_api import get_game_image
-from steam.igdb_api import igdb_api
 from steam.fetch_library import fetch_and_store_games_for_all_users
+from steam.steamgriddb_api import get_game_image
+from utils.config import XBOX_CLIENT_ID, XBOX_CLIENT_SECRET, XBOX_REDIRECT_URI
 from utils.logging import logger
 
-# --- NEW IMPORTS FOR XBOX ---
-from xbox.webapi.api.client import XboxLiveClient
-from xbox.webapi.authentication.manager import SignedSession
-from xbox.webapi.authentication.token import RefreshToken
-from utils.config import XBOX_CLIENT_ID, XBOX_CLIENT_SECRET, XBOX_REDIRECT_URI
-from xbox.webapi.api.provider.titlehub import TitlehubProvider, TitleFields
-from utils.config import XBOX_CLIENT_ID, XBOX_CLIENT_SECRET, XBOX_REDIRECT_URI
 # --- END NEW IMPORTS ---
 
 
@@ -179,7 +176,7 @@ class AutomationTasks(commands.Cog):
         self.bot = bot
 
     # ... [The methods _generate_ics_file, start_game_suggestion_poll, and close_game_suggestion_poll_job are unchanged] ...
-    
+
 
     async def start_game_suggestion_poll(self, game_night_id, channel_id):
         """Start a poll to decide which game to play for a scheduled game night.
@@ -413,17 +410,17 @@ class AutomationTasks(commands.Cog):
     @tasks.loop(hours=24)
     async def daily_game_pass_sync(self):
         logger.info("Daily Game Pass sync task started.")
-        
+
         # The main logic is now to find all users with Game Pass and run the sync for them.
         # This automatically handles users who are new, and games that have been added/removed from GP.
         users_with_gamepass = db_manager.get_users_with_gamepass()
-        
+
         if not users_with_gamepass:
             logger.info("No users have Game Pass enabled. Skipping daily sync.")
             return
-            
+
         logger.info(f"Found {len(users_with_gamepass)} users with Game Pass to sync.")
-        
+
         for user_db in users_with_gamepass:
             try:
                 # We simply call our new, robust function for each user.

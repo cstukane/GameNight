@@ -1,8 +1,9 @@
-import requests
-import subprocess
-import time
 import atexit
+import subprocess
 import sys
+import time
+
+import requests
 
 # This will hold the ngrok process object
 ngrok_process = None
@@ -25,9 +26,11 @@ def get_public_url(port=3000, retries=5, delay=2):
     Returns the public URL or None if it fails.
     
     Args:
+    ----
         port (int): The local port your web service is running on.
         retries (int): Number of times to check for the URL after starting ngrok.
         delay (int): Seconds to wait between retries.
+
     """
     global ngrok_process
 
@@ -78,7 +81,7 @@ def get_public_url(port=3000, retries=5, delay=2):
             pass
         except Exception as e:
             print(f"An error occurred while polling ngrok: {e}")
-        
+
         time.sleep(delay)
 
     # 4. If we finish the loop without a URL, give up

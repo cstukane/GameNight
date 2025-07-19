@@ -142,6 +142,7 @@ class GamePassGame(BaseModel):
     # --- THIS IS THE FIX ---
     class Meta:
         """Meta configuration for the GamePassGame model."""
+
         # This line tells Peewee the exact table name to use,
         # matching what the Node.js script creates.
         table_name = 'game_pass_catalog'
@@ -197,6 +198,7 @@ class GuildConfig(BaseModel):
     main_channel_id = CharField(null=True)
     planning_channel_id = CharField(null=True)
     custom_availability_pattern = TextField(null=True)
+    voice_notification_channel_id = CharField(null=True)
 
 
 def initialize_models():

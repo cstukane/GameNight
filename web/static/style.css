@@ -18,31 +18,7 @@ h1 {
 }
 .header-content {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 15px;
-}
-.filters {
-    display: flex;
-    justify-content: center;
-    gap: 15px;
-    flex-wrap: wrap;
-    flex-grow: 1;
-}
-.filters select, .header-content input[type="text"] {
-    padding: 10px;
-    border-radius: 5px;
-    border: 1px solid #7289da;
-    background-color: #40444b;
-    color: white;
-    font-family: 'Oswald', sans-serif;
-    font-size: 1em;
-}
-
-.header-content {
-    display: flex;
-    flex-direction: column; /* Stack items vertically */
+    flex-direction: column; /* Stack items vertically by default */
     align-items: center; /* Center items horizontally */
     gap: 15px;
 }
@@ -50,6 +26,13 @@ h1 {
 .header-content input[type="text"] {
     width: 100%; /* Make search bar full width */
     max-width: 300px; /* Limit its max width */
+    padding: 10px;
+    border-radius: 5px;
+    border: 1px solid #7289da;
+    background-color: #40444b;
+    color: white;
+    font-family: 'Oswald', sans-serif;
+    font-size: 1em;
 }
 
 .filters {
@@ -191,12 +174,14 @@ h1 {
 
 .game-management-buttons {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
+    justify-content: space-between;
     gap: 10px;
     margin-top: 15px;
 }
 
 .game-management-buttons button {
+    flex-grow: 1; /* Allow buttons to grow and fill space */
     background-color: #7289da;
     color: white;
     border: none;
@@ -210,6 +195,15 @@ h1 {
 .game-management-buttons button:hover {
     background-color: #5b6eae;
 }
+
+.game-management-buttons button.delete-game-button {
+    background-color: #f44336; /* Red color for delete button */
+}
+
+.game-management-buttons button.delete-game-button:hover {
+    background-color: #d32f2f; /* Darker red on hover */
+}
+
 .card-back-title {
     font-size: 1.2em;
     font-weight: bold;
@@ -254,4 +248,239 @@ h1 {
     background-position: center;
     opacity: 0.4;
 }
+
+/* --- Modal Styles --- */
+.modal {
+    display: none; /* Hidden by default */
+    position: fixed; /* Stay in place */
+    z-index: 100; /* Sit on top */
+    left: 0;
+    top: 0;
+    width: 100%; /* Full width */
+    height: 100%; /* Full height */
+    overflow: auto; /* Enable scroll if needed */
+    background-color: rgba(0,0,0,0.7); /* Black w/ opacity */
+    justify-content: center;
+    align-items: center;
+}
+
+.modal-content {
+    background-color: #2c2f33;
+    margin: auto;
+    padding: 20px;
+    border: 1px solid #7289da;
+    border-radius: 8px;
+    width: 80%;
+    max-width: 500px;
+    position: relative;
+    text-align: center;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+}
+
+.modal-content h2 {
+    color: #7289da;
+    margin-top: 0;
+}
+
+.modal-content p {
+    margin-bottom: 20px;
+}
+
+.modal-content select {
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 20px;
+    border-radius: 5px;
+    border: 1px solid #7289da;
+    background-color: #40444b;
+    color: white;
+    font-family: 'Oswald', sans-serif;
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+}
+
+.modal-actions button {
+    background-color: #7289da;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 1em;
+    transition: background-color 0.2s ease;
+}
+
+.modal-actions button:hover {
+    background-color: #5b6eae;
+}
+
+.modal-actions button#cancelDeleteButton {
+    background-color: #6c757d;
+}
+
+.modal-actions button#cancelDeleteButton:hover {
+    background-color: #5a6268;
+}
+
+.close-button {
+    color: #aaa;
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.close-button:hover,
+.close-button:focus {
+    color: #fff;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+/* --- Toast Notification --- */
+.toast {
+    visibility: hidden; /* Hidden by default. */
+    min-width: 250px; /* Set a default minimum width */
+    margin-left: -125px; /* Divide value of min-width by 2 */
+    background-color: #333; /* Black background color */
+    color: #fff; /* White text color */
+    text-align: center; /* Centered text */
+    border-radius: 8px; /* Rounded borders */
+    padding: 16px; /* Padding */
+    position: fixed; /* Sit on top of the screen */
+    z-index: 101; /* Add a z-index if needed */
+    left: 50%; /* Center the toast */
+    bottom: 30px; /* 30px from the bottom */
+    font-size: 1em;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+
+/* Show the toast notification that has been hidden */
+.toast.show {
+    visibility: visible; /* Show the toast */
+    -webkit-animation: fadein 0.5s, fadeout 0.5s 2.5s; /* Fade in and fade out */
+    animation: fadein 0.5s, fadeout 0.5s 2.5s;
+}
+
+/* Animations to fade the toast in and out */
+@-webkit-keyframes fadein {
+    from {bottom: 0; opacity: 0;}
+    to {bottom: 30px; opacity: 1;}
+}
+
+@keyframes fadein {
+    from {bottom: 0; opacity: 0;}
+    to {bottom: 30px; opacity: 1;}
+}
+
+@-webkit-keyframes fadeout {
+    from {bottom: 30px; opacity: 1;}
+    to {bottom: 0; opacity: 0;}
+}
+
+@keyframes fadeout {
+    from {bottom: 30px; opacity: 1;}
+    to {bottom: 0; opacity: 0;}
+}
+
+/* --- Scroll to Top Button --- */
+#scroll-to-top-btn {
+    display: none; /* Hidden by default */
+    position: fixed; /* Fixed/sticky position */
+    bottom: 20px; /* Place the button at the bottom of the page */
+    right: 30px; /* Place the button 30px from the right */
+    z-index: 99; /* Make sure it does not overlap */
+    border: none; /* Remove borders */
+    outline: none; /* Remove outline */
+    background-color: #7289da; /* Set a background color */
+    color: white; /* Text color */
+    cursor: pointer; /* Add a mouse pointer on hover */
+    padding: 15px; /* Some padding */
+    border-radius: 10px; /* Rounded corners */
+    font-size: 18px; /* Increase font size */
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+#scroll-to-top-btn:hover {
+    background-color: #5b6eae; /* Add a darker background on hover */
+}
+
+/* --- Media Queries for Responsiveness --- */
+@media (max-width: 768px) {
+    body {
+        padding: 10px;
+    }
+
+    h1 {
+        font-size: 2em;
+    }
+
+    .header-content {
+        flex-direction: column;
+        align-items: stretch; /* Stretch items to fill width */
+    }
+
+    .header-content input[type="text"] {
+        max-width: 100%; /* Allow search bar to take full width */
+    }
+
+    .filters {
+        flex-direction: column; /* Stack filters vertically */
+        gap: 10px;
+    }
+
+    .filters select, .filters input {
+        width: 100%; /* Make filter selects full width */
+    }
+
+    #game-grid {
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); /* Adjust min card size for tablets */
+    }
+
+    .game-card {
+        height: 280px; /* Adjust card height for smaller screens */
+    }
+}
+
+@media (max-width: 480px) {
+    h1 {
+        font-size: 1.8em;
+    }
+
+    #game-grid {
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); /* Two columns for phones */
+    }
+
+    .game-card {
+        height: 250px; /* Further adjust card height for phones */
+    }
+
+    .game-card-title-banner {
+        font-size: 1em;
+    }
+
+    .action-button {
+        width: 35px;
+        height: 35px;
+        font-size: 1.2em;
+    }
+
+    .game-management-buttons button {
+        font-size: 0.8em;
+        padding: 8px;
+    }
+
+    .card-back-title {
+        font-size: 1.1em;
+    }
+
+    .card-back-content {
+        font-size: 0.85em;
+    }
 }

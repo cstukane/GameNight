@@ -1,5 +1,6 @@
 # Standard library imports
 import json
+import re
 from datetime import datetime
 
 # Third-party imports
@@ -14,6 +15,7 @@ from .models import (
     Game,
     GameNight,
     GameNightAttendee,
+    GamePassGame,
     GameVote,
     GuildConfig,
     Poll,
@@ -22,7 +24,6 @@ from .models import (
     UserAvailability,
     UserGame,
     db,
-    GamePassGame,
 )
 
 
@@ -47,12 +48,34 @@ def add_user(discord_id, username, steam_id=None):
 
 
 async def add_game(
-    title, igdb_id=None, steam_appid=None, tags=None, min_players=None, max_players=None,
+    title=None, igdb_id=None, steam_appid=None, tags=None, min_players=None, max_players=None,
     release_date=None, description=None, last_played=None, metacritic=None, cover_url=None, multiplayer_info=None
 ):
     """Add a new game to the database or update its details if it already exists."""
     try:
         with db.atomic():
+            # If we have an IGDB ID, fetch the game data first
+            if igdb_id and not title:
+                game_data_list = await igdb_api.get_game_by_igdb_id(igdb_id)
+                if game_data_list:
+                    game_data = game_data_list[0]
+                    title = game_data.get("name")
+                    if "cover" in game_data and "image_id" in game_data["cover"]:
+                        cover_url = igdb_api.get_cover_url(game_data["cover"]["image_id"])
+                    if "summary" in game_data:
+                        description = game_data["summary"]
+                    if "multiplayer_modes" in game_data:
+                        multiplayer_info = json.dumps(game_data["multiplayer_modes"])
+                    if "aggregated_rating" in game_data:
+                        metacritic = int(game_data["aggregated_rating"])
+                    if "first_release_date" in game_data:
+                        release_date = datetime.fromtimestamp(game_data["first_release_date"]).strftime('%Y-%m-%d')
+                    if "multiplayer_modes" in game_data:
+                        # Assuming the first multiplayer mode entry has min/max players
+                        if game_data["multiplayer_modes"] and len(game_data["multiplayer_modes"]) > 0:
+                            min_players = game_data["multiplayer_modes"][0].get("splitscreen_minimum") or game_data["multiplayer_modes"][0].get("offline_minimum") or game_data["multiplayer_modes"][0].get("online_minimum")
+                            max_players = game_data["multiplayer_modes"][0].get("splitscreen_maximum") or game_data["multiplayer_modes"][0].get("offline_maximum") or game_data["multiplayer_modes"][0].get("online_maximum")
+
             # In your models.py, igdb_id is the primary key for Game, so we prioritize it.
             if igdb_id:
                 # If an IGDB ID is provided, use it directly.
@@ -127,7 +150,7 @@ async def add_game(
             if multiplayer_info is not None: game.multiplayer_info = multiplayer_info
             game.save()
 
-            return game.igdb_id
+            return game
     except Exception as e:
         logger.error(f"Error in add_game for '{title}': {e}")
         return None
@@ -150,14 +173,14 @@ def add_user_game(user_id, game_id, source):
     try:
         # This will create the link only if the user doesn't already have
         # this exact game from this exact source.
-        UserGame.get_or_create(user=user_id, game=game_id, source=source)
+        UserGame.get_or_create(user=user_id, game=game_id, source=source.upper())
     except Exception as e:
         logger.debug(f"Could not add UserGame link (might already exist): {e}")
 
 
 def get_game_pass_catalog():
     """Retrieve the entire Game Pass catalog from the database."""
-    logger.debug(f"Attempting to retrieve Game Pass catalog from database.")
+    logger.debug("Attempting to retrieve Game Pass catalog from database.")
     try:
         return list(GamePassGame.select(GamePassGame.microsoft_store_id, GamePassGame.title))
     except Exception as e:
@@ -282,8 +305,8 @@ async def sync_user_game_pass_library(user_id: int, has_game_pass: bool):
     games_added_count = 0
     for igdb_id in game_pass_igdb_ids:
         # First, ensure the game exists in our main 'Game' table.
-        game_in_db = get_game_by_igdb_id(igdb_id)
-        if not game_in_db:
+        game_obj = get_game_by_igdb_id(igdb_id)
+        if not game_obj:
             # If it's a new game to our system, fetch its details from IGDB and add it.
             game_data_list = await igdb_api.get_game_by_igdb_id(igdb_id)
             if game_data_list:
@@ -291,16 +314,18 @@ async def sync_user_game_pass_library(user_id: int, has_game_pass: bool):
                 cover_url = igdb_api.get_cover_url(game_data.get("cover", {}).get("image_id")) if game_data.get("cover") else None
 
                 # Use our existing add_game function to create it in the central 'Game' table
-                add_game(
+                game_obj = await add_game(
                     igdb_id=igdb_id,
                     title=game_data.get("name", "Unknown Title"),
                     cover_url=cover_url
                 )
+            else:
+                logger.warning(f"Could not fetch IGDB data for ID {igdb_id}. Skipping.")
+                continue # Skip to next game if data can't be fetched
 
-        # Now that we know the game is in the 'Game' table, link it to the user
-        # with the 'game_pass' source.
-        game_obj = get_game_by_igdb_id(igdb_id)
-        if game_obj:
+        if game_obj: # Ensure game_obj is not None after potential creation
+            # Now that we know the game is in the 'Game' table, link it to the user
+            # with the 'game_pass' source.
             # get_or_create is perfect here. It will only create the link if
             # this user doesn't already have this game from the 'game_pass' source.
             _, created = UserGame.get_or_create(
@@ -333,6 +358,25 @@ def remove_user_game(user_id, game_id, source=None):
     except Exception as e:
         logger.error(f"Error in remove_user_game: {e}")
 
+def remove_user_game_by_source(user_id: int, game_igdb_id: int, source: str):
+    """Remove a specific game ownership record for a user based on game ID and source."""
+    try:
+        with db.atomic():
+            normalized_source = source.upper()
+            logger.info(f"Attempting to remove game {game_igdb_id} for user {user_id} with normalized source {normalized_source}.")
+            # Find the specific UserGame entry
+            user_game_entry = UserGame.get_or_none(
+                (UserGame.user == user_id) &
+                (UserGame.game == game_igdb_id) &
+                (UserGame.source == normalized_source)
+            )
+            if user_game_entry:
+                user_game_entry.delete_instance()
+                logger.info(f"Successfully removed game {game_igdb_id} for user {user_id} from source {source}.")
+            else:
+                logger.warning(f"No matching game ownership found for user {user_id}, game {game_igdb_id}, source {source}. Check parameters.")
+    except Exception as e:
+        logger.error(f"Error in remove_user_game_by_source for user {user_id}, game {game_igdb_id}, source {source}: {e}")
 
 def set_user_game_installed(user_id, game_id, is_installed):
     """Set the installed status for all of a user's copies of a game."""
@@ -416,16 +460,21 @@ def search_games_by_name(query):
         return []
     try:
         # Based on your Game model, the field is 'title'
-        return [game.title for game in Game.select().where(Game.title.icontains(query)).limit(25)]
+        return list(Game.select().where(Game.title ** f'%{query}%').limit(25))
     except Exception as e:
         logger.error(f"Error in search_games_by_name: {e}")
         return []
 
 
-def get_user_game_ownerships(user_id):
+def get_user_game_ownerships(user_id, gamepass_filter='include'):
     """Retrieve all games owned by a specific user."""
     try:
-        return list(UserGame.select().where(UserGame.user == user_id))
+        query = UserGame.select().where(UserGame.user == user_id)
+        if gamepass_filter == 'only':
+            query = query.where(UserGame.source == 'game_pass')
+        elif gamepass_filter == 'exclude':
+            query = query.where(UserGame.source != 'game_pass')
+        return list(query)
     except Exception as e:
         logger.error(f"Error in get_user_game_ownerships: {e}")
         return []
@@ -773,4 +822,39 @@ def get_guild_custom_availability(guild_id):
         return config.custom_availability_pattern if config else None
     except Exception as e:
         logger.error(f"Error getting guild custom availability: {e}")
+        return None
+
+def set_user_voice_notifications(user_id, enabled: bool):
+    """Set whether a user receives voice activity notifications."""
+    try:
+        query = User.update(receive_voice_notifications=enabled).where(User.id == user_id)
+        query.execute()
+    except Exception as e:
+        logger.error(f"Error setting user voice notifications: {e}")
+
+def get_user_voice_notifications(user_id):
+    """Retrieve whether a user receives voice activity notifications."""
+    try:
+        user = User.get_or_none(User.id == user_id)
+        return user.receive_voice_notifications if user else True # Default to True if user not found
+    except Exception as e:
+        logger.error(f"Error getting user voice notifications: {e}")
+        return True
+
+def set_guild_voice_notification_channel(guild_id, channel_id):
+    """Set the voice activity notification channel for a given guild."""
+    try:
+        config, _ = GuildConfig.get_or_create(guild_id=guild_id)
+        config.voice_notification_channel_id = channel_id
+        config.save()
+    except Exception as e:
+        logger.error(f"Error setting guild voice notification channel: {e}")
+
+def get_guild_voice_notification_channel(guild_id):
+    """Retrieve the voice activity notification channel for a given guild."""
+    try:
+        config = GuildConfig.get_or_none(guild_id=guild_id)
+        return config.voice_notification_channel_id if config else None
+    except Exception as e:
+        logger.error(f"Error getting guild voice notification channel: {e}")
         return None

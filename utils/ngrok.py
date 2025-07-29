@@ -42,7 +42,7 @@ def get_public_url(port=3000, retries=5, delay=2):
         tunnels = response.json()["tunnels"]
         https_tunnel = next((t for t in tunnels if t["proto"] == "https" and t["config"]["addr"].endswith(str(port))), None)
         if https_tunnel:
-            print(f"✅ Found existing ngrok tunnel: {https_tunnel['public_url']}")
+            print(f"Found existing ngrok tunnel: {https_tunnel['public_url']}")
             return https_tunnel['public_url']
         print("Found ngrok, but no tunnel for the correct port. Starting a new one.")
     except requests.exceptions.ConnectionError:
@@ -58,10 +58,10 @@ def get_public_url(port=3000, retries=5, delay=2):
         print(f"Started ngrok process for port {port}. Waiting for it to initialize...")
         time.sleep(delay) # Give ngrok a moment to start up
     except FileNotFoundError:
-        print("❌ CRITICAL: 'ngrok' command not found. Make sure ngrok is installed and in your system's PATH.")
+        print("CRITICAL: 'ngrok' command not found. Make sure ngrok is installed and in your system's PATH.")
         sys.exit(1) # Exit because we can't proceed
     except Exception as e:
-        print(f"❌ Failed to start ngrok: {e}")
+        print(f"Failed to start ngrok: {e}")
         return None
 
     # 3. Poll the API to get the new tunnel's URL
@@ -74,7 +74,7 @@ def get_public_url(port=3000, retries=5, delay=2):
             https_tunnel = next((t for t in tunnels if t["proto"] == "https"), None)
             if https_tunnel:
                 public_url = https_tunnel['public_url']
-                print(f"✅ ngrok tunnel is live at: {public_url}")
+                print(f"ngrok tunnel is live at: {public_url}")
                 return public_url
         except requests.exceptions.ConnectionError:
             # This is expected for a moment while ngrok starts
@@ -85,6 +85,6 @@ def get_public_url(port=3000, retries=5, delay=2):
         time.sleep(delay)
 
     # 4. If we finish the loop without a URL, give up
-    print("❌ Failed to get public URL from ngrok after multiple attempts.")
+    print("Failed to get public URL from ngrok after multiple attempts.")
     cleanup_ngrok() # Clean up the failed process
     return None

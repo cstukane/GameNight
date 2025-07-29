@@ -27,21 +27,22 @@ from .models import (
 )
 
 
-def add_user(discord_id, username, steam_id=None):
+def add_user(discord_id, username, steam_id=None, receive_voice_notifications=True):
     """Add a new user to the database or update an existing one."""
     try:
         with db.atomic():
             user, created = User.get_or_create(
                 discord_id=discord_id,
-                defaults={'username': username, 'steam_id': steam_id, 'is_active': True}
+                defaults={'username': username, 'steam_id': steam_id, 'is_active': True, 'receive_voice_notifications': receive_voice_notifications}
             )
             if not created:
                 user.username = username
                 if steam_id is not None:
                     user.steam_id = steam_id
                 user.is_active = True
+                user.receive_voice_notifications = receive_voice_notifications
                 user.save()
-            return user.id
+            return user
     except Exception as e:
         logger.error(f"Error in add_user: {e}")
         return None
@@ -362,7 +363,8 @@ def remove_user_game_by_source(user_id: int, game_igdb_id: int, source: str):
     """Remove a specific game ownership record for a user based on game ID and source."""
     try:
         with db.atomic():
-            normalized_source = source.upper()
+            logger.debug(f"Attempting to remove game: user_id={user_id}, game_igdb_id={game_igdb_id}, source={source}")
+            normalized_source = source.lower()
             logger.info(f"Attempting to remove game {game_igdb_id} for user {user_id} with normalized source {normalized_source}.")
             # Find the specific UserGame entry
             user_game_entry = UserGame.get_or_none(
@@ -373,8 +375,10 @@ def remove_user_game_by_source(user_id: int, game_igdb_id: int, source: str):
             if user_game_entry:
                 user_game_entry.delete_instance()
                 logger.info(f"Successfully removed game {game_igdb_id} for user {user_id} from source {source}.")
+                return True
             else:
-                logger.warning(f"No matching game ownership found for user {user_id}, game {game_igdb_id}, source {source}. Check parameters.")
+                logger.warning(f"No matching game ownership found for user {user_id}, game {game_igdb_id}, source {normalized_source}. Check parameters.")
+                return False
     except Exception as e:
         logger.error(f"Error in remove_user_game_by_source for user {user_id}, game {game_igdb_id}, source {source}: {e}")
 
@@ -474,7 +478,8 @@ def get_user_game_ownerships(user_id, gamepass_filter='include'):
             query = query.where(UserGame.source == 'game_pass')
         elif gamepass_filter == 'exclude':
             query = query.where(UserGame.source != 'game_pass')
-        return list(query)
+        user_games = list(query)
+        return user_games
     except Exception as e:
         logger.error(f"Error in get_user_game_ownerships: {e}")
         return []
@@ -521,20 +526,79 @@ def set_user_game_pass_status(user_id, has_game_pass: bool):
         logger.error(f"Error in set_user_game_pass_status: {e}")
 
 
-def get_games_owned_by_users(user_ids):
-    """Retrieve games owned by ALL users in a list."""
+def get_common_games_for_users(user_ids: list[int], gamepass_filter='include'):
+    """Retrieve games common to all users in a list."""
     if not user_ids:
         return []
     try:
-        return list(
-            Game.select()
-            .join(UserGame)
+        # Step 1: Find the set of game IDs that are common to all users.
+        # This query identifies game_ids owned by the correct number of unique users.
+        common_games_query = (
+            UserGame.select(UserGame.game)
             .where(UserGame.user.in_(user_ids))
-            .group_by(Game.id)
+            .group_by(UserGame.game)
             .having(fn.COUNT(UserGame.user.distinct()) == len(user_ids))
         )
+        
+        common_game_ids = [ug.game.igdb_id for ug in common_games_query]
+
+        if not common_game_ids:
+            return []
+
+        # Step 2: Fetch all UserGame entries for these common games, but only for the specified users.
+        # This is crucial to get the correct source, liked, disliked, etc., information for each user.
+        final_query = UserGame.select(UserGame, Game).join(Game).where(
+            (UserGame.game.in_(common_game_ids)) &
+            (UserGame.user.in_(user_ids)) # This ensures we only get ownerships for the selected users
+        )
+
+        # Step 3: Apply the gamepass_filter to the results from Step 2.
+        # This is the corrected logic. We filter AFTER finding the common games.
+        if gamepass_filter == 'only':
+            # We need to check if ALL users in the list own the game via Game Pass.
+            # This is more complex than a simple where clause.
+            # We'll filter this in Python after fetching the data.
+            pass # See Python-side filtering below
+        elif gamepass_filter == 'exclude':
+            # Exclude games where ANY of the selected users own it via Game Pass.
+            # We find all common games where at least one user has it on game pass
+            game_pass_game_ids = (
+                final_query.where(UserGame.source == 'GAME_PASS')
+                .distinct(UserGame.game)
+                .select(UserGame.game)
+            )
+            # Then we exclude these games from our main query
+            final_query = final_query.where(UserGame.game.not_in(game_pass_game_ids))
+
+        all_user_games = list(final_query)
+
+        # Python-side filtering for the 'only' case
+        if gamepass_filter == 'only':
+            game_to_users = {}
+            for ug in all_user_games:
+                if ug.game.igdb_id not in game_to_users:
+                    game_to_users[ug.game.igdb_id] = set()
+                game_to_users[ug.game.igdb_id].add(ug.user.id)
+            
+            # Find games where the set of users who own it on Game Pass is the same as the full set of users
+            game_pass_only_ids = set()
+            for game_id, user_set in game_to_users.items():
+                # Check if all users in the original list own this game via game pass
+                is_owned_by_all_on_gp = True
+                for user_id in user_ids:
+                    # This check is complex, we need to query specifically for game pass ownership
+                    if not UserGame.select().where((UserGame.user == user_id) & (UserGame.game == game_id) & (UserGame.source == 'GAME_PASS')).exists():
+                        is_owned_by_all_on_gp = False
+                        break
+                if is_owned_by_all_on_gp:
+                    game_pass_only_ids.add(game_id)
+
+            # Filter the final list
+            all_user_games = [ug for ug in all_user_games if ug.game.igdb_id in game_pass_only_ids]
+
+        return all_user_games
     except Exception as e:
-        logger.error(f"Error in get_games_owned_by_users: {e}")
+        logger.error(f"Error in get_common_games_for_users: {e}")
         return []
 
 
@@ -661,6 +725,23 @@ def get_attended_game_nights_count(user_id, start_date, end_date):
     except Exception as e:
         logger.error(f"Error getting attended game nights count: {e}")
         return 0
+
+def set_attendee_status(game_night_id, user_id, status):
+    """Set or update a user's attendance status for a specific game night."""
+    try:
+        with db.atomic():
+            attendee, created = GameNightAttendee.get_or_create(
+                game_night=game_night_id,
+                user=user_id,
+                defaults={'status': status}
+            )
+            if not created:
+                attendee.status = status
+                attendee.save()
+            return True
+    except Exception as e:
+        logger.error(f"Error setting attendee status for game_night_id {game_night_id}, user_id {user_id}: {e}")
+        return False
 
 
 def create_poll(
@@ -857,4 +938,13 @@ def get_guild_voice_notification_channel(guild_id):
         return config.voice_notification_channel_id if config else None
     except Exception as e:
         logger.error(f"Error getting guild voice notification channel: {e}")
+        return None
+
+# --- THIS FUNCTION IS NEW ---
+def get_guild_config(guild_id):
+    """Retrieve the entire configuration for a given guild."""
+    try:
+        return GuildConfig.get_or_none(guild_id=guild_id)
+    except Exception as e:
+        logger.error(f"Error getting guild config for {guild_id}: {e}")
         return None

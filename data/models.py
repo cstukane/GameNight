@@ -39,6 +39,8 @@ class User(BaseModel):
     default_reminder_offset_minutes = IntegerField(default=60)  # Default to 60 minutes
     xbox_refresh_token = TextField(null=True)
     xbox_xuid = CharField(null=True)
+    # --- THIS LINE IS NEW ---
+    receive_voice_notifications = BooleanField(default=True)
 
 
 class UserAvailability(BaseModel):

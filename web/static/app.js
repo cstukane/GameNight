@@ -2,7 +2,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Element Selectors ---
     const gameGrid = document.getElementById('game-grid');
     const libraryTitle = document.getElementById('library-title');
-    const userSwitcher = document.getElementById('user-switcher');
+    const userSwitcherButton = document.getElementById('user-switcher-button');
+    const userSwitcherDropdown = document.getElementById('user-switcher-dropdown');
+    let selectedUserIds = []; // To store selected user IDs
     const nameFilterInput = document.getElementById('name-filter');
     const platformFilter = document.getElementById('platform-filter');
     const playersFilter = document.getElementById('players-filter');
@@ -15,7 +17,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Initial Load ---
     function initialize() {
         loadUsers();
-        loadUserLibrary(currentDiscordId);
+        // Initialize selectedUserIds with the initial user
+        selectedUserIds = [INITIAL_DISCORD_ID];
+        loadUserLibrary(selectedUserIds);
     }
 
     function loadUsers() {
@@ -23,28 +27,88 @@ document.addEventListener('DOMContentLoaded', () => {
             .then(res => res.json())
             .then(users => {
                 users.sort((a, b) => a.username.localeCompare(b.username));
-                userSwitcher.innerHTML = '';
+                userSwitcherDropdown.innerHTML = ''; // Clear previous content
                 users.forEach(user => {
-                    const option = new Option(user.username, user.discord_id);
-                    if (user.discord_id === currentDiscordId) {
-                        option.selected = true;
-                        libraryTitle.textContent = `${user.username}'s Library`;
+                    const userDiv = document.createElement('div');
+                    userDiv.className = 'dropdown-item';
+                    userDiv.innerHTML = `
+                        <input type="checkbox" id="user-${user.discord_id}" value="${user.discord_id}" data-username="${user.username}">
+                        <label for="user-${user.discord_id}">${user.username}</label>
+                    `;
+                    userSwitcherDropdown.appendChild(userDiv);
+
+                    const checkbox = userDiv.querySelector(`#user-${user.discord_id}`);
+                    const label = userDiv.querySelector(`label[for="user-${user.discord_id}"]`);
+
+                    // Set initial checked state
+                    if (user.discord_id === INITIAL_DISCORD_ID) {
+                        checkbox.checked = true;
                     }
-                    userSwitcher.add(option);
+
+                    // Event listener for checkbox change
+                    checkbox.addEventListener('change', () => {
+                        if (checkbox.checked) {
+                            selectedUserIds.push(user.discord_id);
+                        } else {
+                            selectedUserIds = selectedUserIds.filter(id => id !== user.discord_id);
+                        }
+                        loadUserLibrary(selectedUserIds);
+                    });
+
+                    // Event listener for label click (single-select behavior)
+                    label.addEventListener('click', (event) => {
+                        event.preventDefault(); // Prevent checkbox default toggle
+                        // If this user is already the only one selected, do nothing
+                        if (selectedUserIds.length === 1 && selectedUserIds[0] === user.discord_id) {
+                            return;
+                        }
+
+                        // Clear all other checkboxes and select only this one
+                        userSwitcherDropdown.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+                            cb.checked = (cb.value === user.discord_id);
+                        });
+                        selectedUserIds = [user.discord_id];
+                        loadUserLibrary(selectedUserIds);
+                    });
                 });
             });
     }
 
     let isCurrentUserLibrary = false;
 
-    function loadUserLibrary(discordId) {
-        currentDiscordId = discordId;
-        isCurrentUserLibrary = (currentDiscordId === viewerId);
+    function loadUserLibrary(discordIds) {
+        // Update currentDiscordId to the first ID if only one is selected, for backward compatibility
+        currentDiscordId = discordIds.length === 1 ? discordIds[0] : null;
+        isCurrentUserLibrary = (discordIds.length === 1 && discordIds[0] === viewerId);
 
-        const selectedUser = Array.from(userSwitcher.options).find(opt => opt.value === discordId);
-        if (selectedUser) libraryTitle.textContent = `${selectedUser.textContent}'s Library`;
+        // Update library title based on selected users
+        if (discordIds.length === 0) {
+            libraryTitle.textContent = 'Select Users';
+            allGames = [];
+            renderGames([]);
+            return;
+        } else if (discordIds.length === 1) {
+            const selectedUser = userSwitcherDropdown.querySelector(`input[value="${discordIds[0]}"]`);
+            if (selectedUser) {
+                libraryTitle.textContent = `${selectedUser.dataset.username}'s Library`;
+            }
+        } else {
+            const selectedUsernames = Array.from(userSwitcherDropdown.querySelectorAll('input[type="checkbox"]:checked'))
+                                        .map(cb => cb.dataset.username);
+            libraryTitle.textContent = `Games common to ${selectedUsernames.join(' & ')}`;
+        }
 
-        fetch(`/api/games/${discordId}`)
+        const userIdsParam = discordIds.join(',');
+        // Update the button text
+        if (discordIds.length === 0) {
+            userSwitcherButton.textContent = 'Select Users';
+        } else {
+            const selectedUsernames = Array.from(userSwitcherDropdown.querySelectorAll('input[type="checkbox"]'))
+                                        .filter(cb => discordIds.includes(cb.value))
+                                        .map(cb => cb.dataset.username);
+            userSwitcherButton.textContent = selectedUsernames.join(', ');
+        }
+        fetch(`/api/games?user_ids=${userIdsParam}`)
             .then(res => res.json())
             .then(games => {
                 allGames = games.sort((a, b) => a.name.localeCompare(b.name));
@@ -54,7 +118,20 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- Event Listeners for Filters ---
-    userSwitcher.addEventListener('change', () => loadUserLibrary(userSwitcher.value));
+    userSwitcherButton.addEventListener('click', () => {
+        userSwitcherDropdown.classList.toggle('show');
+    });
+
+    // Close the dropdown if the user clicks outside of it
+    window.addEventListener('click', (event) => {
+        if (!event.target.matches('#user-switcher-button') && !event.target.closest('.user-switcher-container')) {
+            if (userSwitcherDropdown.classList.contains('show')) {
+                userSwitcherDropdown.classList.remove('show');
+            }
+        }
+    });
+
+    // Existing filter event listeners
     [nameFilterInput, platformFilter, playersFilter, gamepassFilter].forEach(el => el.addEventListener('input', applyFilters));
 
     // --- Filtering Logic ---
@@ -360,7 +437,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 },
                 body: JSON.stringify({ discord_id: currentDiscordId, game_id: gameId, source: sourceToRemove }),
             });
+            console.log('Delete API Response Status:', response.status);
             const result = await response.json();
+            console.log('Delete API Response Body:', result);
             if (result.success) {
                 showToast('Game removed successfully!');
                 loadUserLibrary(currentDiscordId); // Reload library

@@ -94,10 +94,10 @@ class UtilityCommands(commands.Cog):
         """Initialize the UtilityCommands cog."""
         self.bot = bot
 
-    @app_commands.command(name="ping", description="Responds with Pong!")
-    async def ping(self, interaction: discord.Interaction):
+    @commands.command(name="ping")
+    async def ping(self, ctx: commands.Context):
         """Check if the bot is online."""
-        await interaction.response.send_message("Pong!", ephemeral=True)
+        await ctx.send("Pong!")
 
     @app_commands.command(name="profile", description="Displays a user's profile and a link to their game library.")
     @app_commands.describe(user="The user whose profile you want to view. Defaults to yourself.")
@@ -202,48 +202,56 @@ class UtilityCommands(commands.Cog):
 
         embed = discord.Embed(
             title="Game Night Bot Help",
-            description="Here's how you can use me:",
+            description=(
+                "I'm a bot designed to help you organize and enjoy game nights!"
+            ),
             color=discord.Color.blue()
         )
 
-        # Get all commands from the bot's command tree
-        all_commands = self.bot.tree.get_commands()
+        # General & Profile Commands
+        embed.add_field(
+            name="Profile Commands",
+            value='''**`/set_steam_id`**
+Links your Steam account to your library. You can find your Steam ID on steamid.io.
 
-        # Categorize commands
-        categorized_commands = {
-            "General & Profile": [],
-            "Game Management": [],
-            "Game Night Organization": [],
-            "Admin Commands": []
-        }
+**`/set_gamepass_status`**
+Sets your Game Pass status to your library.
 
-        for command in all_commands:
-            # Skip commands that are not visible or are subcommands
-            if command.parent or command.name == "help":
-                continue
+**`/set_reminder_offset**
+Sets your reminder time before a game night.
 
-            command_info = f"**/{command.name}** - {command.description}"
+**`/wrapped_discord`**
+Shows your voice chat stats for a given year.
 
-            # Simple categorization based on command name or cog
-            if command.name in ["ping", "profile", "set_steam_id", "link_xbox", "set_gamepass_status", "set_reminder_offset", "wrapped_discord", "wrapped_history", "set_voice_notifications"]:
-                categorized_commands["General & Profile"].append(command_info)
-            elif command.name in ["add_game", "manage_games", "view_library", "suggest_games"]:
-                categorized_commands["Game Management"].append(command_info)
-            elif command.name in ["setup_game_night", "set_game_night_availability", "set_weekly_availability"]:
-                categorized_commands["Game Night Organization"].append(command_info)
-            elif command.name in ["set_main_channel", "set_voice_notification_channel", "set_availability"]: # set_availability is configure_weekly_slots
-                categorized_commands["Admin Commands"].append(command_info)
-            else:
-                # Fallback for any uncategorized commands
-                categorized_commands["General & Profile"].append(command_info)
+**`/wrapped_history`**
+Displays game night attendance history.''',
+            inline=False
+        )
 
+        # Game Management Commands
+        embed.add_field(
+            name="Management Commands",
+            value='''**`/view_library`**
+A site where you can browse and filter a user's library.
 
-        # Add fields to the embed for each category
-        for category, commands_list in categorized_commands.items():
-            if commands_list:
-                embed.add_field(name=category, value="\n".join(commands_list), inline=False)
+**`/manage_games`**
+An interactive menu to manage games in your library.
 
-        embed.set_footer(text="Find your Steam ID at steamid.io.")
+**`/add_games`**
+Add games to your library with an autocomplete feature to help.''',
+            inline=False
+        )
+
+        #  Organization Commands
+        embed.add_field(
+            name="Organization Commands",
+            value='''**`/setup_game_night`**
+Schedules a game night, creates an poll for attendees, and automates game selection.
+
+**`/set_weekly_availability`**
+Configure your recurring availability for game nights.''',
+            inline=False
+        )
         await interaction.followup.send(embed=embed, ephemeral=True)
 
     @app_commands.command(name="set_weekly_availability", description="Set your recurring weekly availability for game nights.")

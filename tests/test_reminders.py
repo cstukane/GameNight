@@ -24,6 +24,7 @@ async def mock_bot():
     intents.message_content = True
     bot = commands.Bot(command_prefix="!", intents=intents, application_id=1234567890)
     bot.scheduler = MagicMock()
+    bot.logger = MagicMock() # Add mock logger
     cog = GameNightCommands(bot)
     await bot.add_cog(cog)
     return bot

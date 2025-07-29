@@ -41,14 +41,12 @@ class GameNightBot(commands.Bot):
         # Load cogs
         for filename in os.listdir('./bot/cogs'):
             if filename.endswith('.py'):
-                if filename == 'automation_tasks.py': # Load automation_tasks last
-                    continue
                 await self.load_extension(f'bot.cogs.{filename[:-3]}')
                 logger.info(f"Loaded cog: {filename[:-3]}")
 
-        # Load automation_tasks last to ensure all other cogs are ready
-        await self.load_extension('bot.cogs.automation_tasks')
-        logger.info("Loaded cog: automation_tasks")
+        # Add persistent views
+        from bot.poll_manager import AvailabilityPollView
+        self.add_view(AvailabilityPollView())
 
         # This syncs the command tree to the guild.
         # Commands will appear instantly in this guild.
@@ -151,6 +149,7 @@ async def main():
 
     intents = discord.Intents.default()
     intents.voice_states = True
+    intents.members = True
     bot = GameNightBot(intents=intents)
     await bot.start(DISCORD_BOT_TOKEN)
 

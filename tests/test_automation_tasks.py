@@ -46,7 +46,7 @@ async def test_start_weekly_availability_poll_success(automation_tasks_cog, mock
         "123": "0,1,2,3,4,5,6"  # User available every day
     }):
         with patch('data.db_manager.get_all_users', return_value=[mock_user]):
-            with patch('data.db_manager.get_guild_planning_channel', return_value="123456789012345678"):
+            with patch('data.db_manager.get_guild_main_channel', return_value="123456789012345678"):
                 with patch('data.db_manager.create_poll', return_value=1):
                     await automation_tasks_cog.start_weekly_availability_poll()
                     mock_bot.get_channel.return_value.send.assert_called_once()
@@ -76,7 +76,7 @@ async def test_start_weekly_availability_poll_with_custom_pattern(automation_tas
             "123": "0,1,2,3,4,5,6"  # User available every day
         }):
             with patch('data.db_manager.get_all_users', return_value=[mock_user]):
-                with patch('data.db_manager.get_guild_planning_channel', return_value="123456789012345678"):
+                with patch('data.db_manager.get_guild_main_channel', return_value="123456789012345678"):
                     with patch('data.db_manager.create_poll', return_value=1) as mock_create_poll:
                         await automation_tasks_cog.start_weekly_availability_poll()
 

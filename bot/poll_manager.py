@@ -1,3 +1,4 @@
+import re
 import discord
 
 from data import db_manager
@@ -6,40 +7,54 @@ from data import db_manager
 class AvailabilityPollView(discord.ui.View):
     """A persistent view for handling game night availability polls."""
 
-    def __init__(self, game_night_id: int):
+    def __init__(self, game_night_id: int = None):
         """Initialize the AvailabilityPollView."""
         super().__init__(timeout=None)  # Polls should persist
         self.game_night_id = game_night_id
 
+    async def _get_game_night_id_from_interaction(self, interaction: discord.Interaction) -> int | None:
+        """Extracts the game_night_id from the message embed."""
+        if self.game_night_id:
+            return self.game_night_id
+        
+        try:
+            embed = interaction.message.embeds[0]
+            title = embed.title
+            match = re.search(r"\(ID: (\d+)\)", title)
+            if match:
+                return int(match.group(1))
+        except (IndexError, AttributeError, TypeError, ValueError):
+            return None
+        return None
+
+    async def _handle_availability(self, interaction: discord.Interaction, status: str):
+        """Generic handler for availability button clicks."""
+        game_night_id = await self._get_game_night_id_from_interaction(interaction)
+        if not game_night_id:
+            await interaction.response.send_message("Error: Could not identify the game night for this poll.", ephemeral=True)
+            return
+
+        user_db_id = db_manager.add_user(str(interaction.user.id), interaction.user.display_name)
+        if user_db_id:
+            db_manager.set_attendee_status(game_night_id, user_db_id, status)
+            await interaction.response.send_message(f"You've marked yourself as **{status.title()}**!", ephemeral=True)
+        else:
+            await interaction.response.send_message("Error: Could not register your availability.", ephemeral=True)
+
     @discord.ui.button(label="Attending", style=discord.ButtonStyle.success, custom_id="availability_attending")
     async def attending_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Handle the 'Attending' button click, updating the user's status."""
-        user_db_id = db_manager.add_user(str(interaction.user.id), interaction.user.display_name)
-        if user_db_id:
-            db_manager.set_attendee_status(self.game_night_id, user_db_id, "attending")
-            await interaction.response.send_message("You've marked yourself as **Attending**!", ephemeral=True)
-        else:
-            await interaction.response.send_message("Error: Could not register your availability.", ephemeral=True)
+        await self._handle_availability(interaction, "attending")
 
     @discord.ui.button(label="Maybe", style=discord.ButtonStyle.primary, custom_id="availability_maybe")
     async def maybe_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Handle the 'Maybe' button click, updating the user's status."""
-        user_db_id = db_manager.add_user(str(interaction.user.id), interaction.user.display_name)
-        if user_db_id:
-            db_manager.set_attendee_status(self.game_night_id, user_db_id, "maybe")
-            await interaction.response.send_message("You've marked yourself as **Maybe**.", ephemeral=True)
-        else:
-            await interaction.response.send_message("Error: Could not register your availability.", ephemeral=True)
+        await self._handle_availability(interaction, "maybe")
 
     @discord.ui.button(label="Not Attending", style=discord.ButtonStyle.danger, custom_id="availability_not_attending")
     async def not_attending_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Handle the 'Not Attending' button click, updating the user's status."""
-        user_db_id = db_manager.add_user(str(interaction.user.id), interaction.user.display_name)
-        if user_db_id:
-            db_manager.set_attendee_status(self.game_night_id, user_db_id, "not_attending")
-            await interaction.response.send_message("You've marked yourself as **Not Attending**.", ephemeral=True)
-        else:
-            await interaction.response.send_message("Error: Could not register your availability.", ephemeral=True)
+        await self._handle_availability(interaction, "not_attending")
 
 
 async def create_availability_poll(channel: discord.TextChannel, game_night_id: int, scheduled_time: str):

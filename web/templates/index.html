@@ -23,7 +23,12 @@
                         <option value="only">Only Game Pass</option>
                         <option value="exclude">Exclude Game Pass</option>
                     </select>
-                    <select id="user-switcher"></select>
+                    <div class="user-switcher-container">
+                        <button id="user-switcher-button">Select Users</button>
+                        <div id="user-switcher-dropdown" class="dropdown-content">
+                            <!-- Checkboxes will be dynamically inserted here by JavaScript -->
+                        </div>
+                    </div>
                 </div>
             </div>
         </header>

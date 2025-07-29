@@ -41,18 +41,34 @@ def get_all_users_api():
     user_list = [{"discord_id": u.discord_id, "username": u.username} for u in users]
     return jsonify(user_list)
 
-@app.route('/api/games/<discord_id>')
-def get_user_games(discord_id):
-    """Fetch all games owned by a specific user."""
+@app.route('/api/games')
+def get_games_for_users():
+    """Fetch games owned by one or more users. If multiple users, return common games."""
+    user_ids_str = request.args.get('user_ids')
     gamepass_filter = request.args.get('gamepass_filter', 'include')
-    logger.info(f"Attempting to fetch games for Discord ID: {discord_id}")
-    user_db = db_manager.get_user_by_discord_id(discord_id)
-    if not user_db:
-        logger.warning(f"User with Discord ID {discord_id} not found in database.")
-        return jsonify({"error": "User not found"}), 404
-    logger.info(f"Found user: {user_db.username} (DB ID: {user_db.id})")
-    user_games_data = db_manager.get_user_game_ownerships(user_db.id, gamepass_filter=gamepass_filter)
-    logger.info(f"Retrieved {len(user_games_data)} game ownership records for user {user_db.username}.")
+
+    if not user_ids_str:
+        return jsonify({"error": "No user_ids provided"}), 400
+
+    discord_ids = user_ids_str.split(',')
+    user_dbs = [db_manager.get_user_by_discord_id(did) for did in discord_ids]
+    user_dbs = [u for u in user_dbs if u is not None] # Filter out any non-existent users
+
+    if not user_dbs:
+        logger.warning(f"No valid users found for provided Discord IDs: {user_ids_str}")
+        return jsonify({"error": "No valid users found"}), 404
+
+    if len(user_dbs) == 1:
+        user_db = user_dbs[0]
+        logger.info(f"Attempting to fetch games for single user: {user_db.username} (Discord ID: {user_db.discord_id})")
+        user_games_data = db_manager.get_user_game_ownerships(user_db.id, gamepass_filter=gamepass_filter)
+        logger.info(f"Retrieved {len(user_games_data)} game ownership records for user {user_db.username}.")
+    else:
+        logger.info(f"Attempting to fetch common games for users: {', '.join([u.username for u in user_dbs])}")
+        user_db_ids = [u.id for u in user_dbs]
+        user_games_data = db_manager.get_common_games_for_users(user_db_ids, gamepass_filter=gamepass_filter)
+        logger.info(f"Retrieved {len(user_games_data)} common game ownership records.")
+
     # Consolidate games by IGDB ID to handle multiple sources
     consolidated_games = {}
     for ug in user_games_data:
@@ -119,7 +135,7 @@ async def get_game_details_api(game_id):
     owner_list = [{"username": uname, "platform": p} for oid, uname, p in owners_info]
 
     details = {
-        "name": game.name,
+        "name": game.title,
         "steam_appid": game.steam_appid,
         "description": game.description,
         "metacritic": game.metacritic or "Not available",
@@ -205,18 +221,26 @@ def delete_game_api():
     source_to_remove = data.get('source')
 
     if not user_discord_id or not game_igdb_id or not source_to_remove:
+        logger.warning(f"Missing data for delete_game_api: discord_id={user_discord_id}, game_id={game_igdb_id}, source={source_to_remove}")
         return jsonify({"error": "Missing discord_id, game_id, or source"}), 400
+
+    logger.info(f"Attempting to delete game: user_discord_id={user_discord_id}, game_igdb_id={game_igdb_id}, source_to_remove={source_to_remove}")
 
     user_db = db_manager.get_user_by_discord_id(user_discord_id)
     if not user_db:
         return jsonify({"error": "User not found"}), 404
 
+    logger.info(f"User found for deletion: user_id={user_db.id}, discord_id={user_discord_id}")
+
     try:
-        db_manager.remove_user_game_by_source(user_db.id, game_igdb_id, source_to_remove)
-        return jsonify({"success": True, "message": "Game removed successfully"}), 200
+        deleted = db_manager.remove_user_game_by_source(user_db.id, game_igdb_id, source_to_remove)
+        if deleted:
+            return jsonify({"success": True, "message": "Game removed successfully"}), 200
+        else:
+            return jsonify({"success": False, "error": "No matching game ownership found to delete."}), 404
     except Exception as e:
         logger.error(f"Error deleting game: {e}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route('/api/gamepass/add', methods=['POST'])
 def add_game_pass_game_api():

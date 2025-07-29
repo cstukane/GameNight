@@ -49,8 +49,9 @@ class AvailabilityPollView(discord.ui.View):
 
         # Create buttons for each slot
         for i, slot in enumerate(suggested_slots):
+            end_time = slot + timedelta(hours=2)
             button = discord.ui.Button(
-                label=slot.strftime('%a %I:%M %p'),
+                label=f"{slot.strftime('%a %I:%M %p')} - {end_time.strftime('%I:%M %p')}",
                 style=discord.ButtonStyle.secondary,
                 custom_id=f"slot_{i}"
             )
@@ -474,32 +475,36 @@ class AutomationTasks(commands.Cog):
         if custom_pattern_json:
             custom_pattern = json.loads(custom_pattern_json)
             today = datetime.now()
+            unique_potential_slots = set()
             for i in range(7):  # Iterate through the next 7 days
                 current_day = today + timedelta(days=i)
                 day_of_week_num = current_day.weekday()  # 0=Monday, 6=Sunday
 
-                # Get selected slots for this day from the custom pattern
                 selected_slot_indices = custom_pattern.get(str(day_of_week_num), [])
                 for slot_index in selected_slot_indices:
-                    # Convert slot index back to hour and minute
-                    hour = slot_index // 2
-                    minute = 30 if slot_index % 2 == 1 else 0
-                    potential_slots.append(
-                                            current_day.replace(hour=hour, minute=minute, second=0)
-                    )
+                    # slot_index is already the hour (0-23) from WeeklyAvailabilityConfigView
+                    start_hour = slot_index
+                    # Ensure the 2-hour block doesn't go past midnight
+                    two_hour_block_start_dt = current_day.replace(hour=start_hour, minute=0, second=0, microsecond=0)
+                    unique_potential_slots.add(two_hour_block_start_dt)
+            potential_slots = sorted(list(unique_potential_slots))
         else:
             # Fallback to existing hardcoded logic if no custom pattern
             today = datetime.now()
+            unique_potential_slots = set()
             for i in range(7):
                 day = today + timedelta(days=i)
                 if day.weekday() < 5:  # Mon-Fri
-                    for hour in [19, 20, 21]:
-                        potential_slots.append(
+                    # Offer 2-hour blocks starting at 7 PM, 9 PM
+                    for hour in [19, 21]: # 7-9 PM, 9-11 PM
+                        unique_potential_slots.add(
                             day.replace(hour=hour, minute=0, second=0, microsecond=0))
                 else:  # Sat-Sun
-                    for hour in [14, 16, 18, 20]:
-                        potential_slots.append(
+                    # Offer 2-hour blocks starting at 2 PM, 4 PM, 6 PM, 8 PM
+                    for hour in [14, 16, 18, 20]: # 2-4 PM, 4-6 PM, 6-8 PM, 8-10 PM
+                        unique_potential_slots.add(
                             day.replace(hour=hour, minute=0, second=0, microsecond=0))
+            potential_slots = sorted(list(unique_potential_slots))
 
         all_users_weekly_availability = db_manager.get_all_users_weekly_availability()
         filtered_slots = []
@@ -534,7 +539,7 @@ class AutomationTasks(commands.Cog):
         expected_participants_discord_ids_json = json.dumps(
             expected_participants_discord_ids)
 
-        target_channel_id = db_manager.get_guild_planning_channel(str(guild_id))
+        target_channel_id = db_manager.get_guild_main_channel(str(guild_id))
         if not target_channel_id:
             logger.error(f"No planning channel set for guild {guild_id}. Use /set_planning_channel.")
             # Optionally, send a message to a default channel or the guild owner

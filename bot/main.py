@@ -29,6 +29,7 @@ class GameNightBot(commands.Bot):
         self.scheduler = AsyncIOScheduler()  # Initialize scheduler
         self.web_client = None # Initialize web_client
         self.logger = logger # Assign the main logger to the bot instance
+        self._did_fallback_sync = False  # Track whether we've done a fallback guild-only sync
 
     async def setup_hook(self):
         """Perform asynchronous setup after the bot is ready but before it has connected."""
@@ -48,10 +49,14 @@ class GameNightBot(commands.Bot):
         from bot.poll_manager import AvailabilityPollView
         self.add_view(AvailabilityPollView())
 
-        # This syncs the command tree to the guild.
+        # This syncs the command tree to the configured guild for fast availability.
         # Commands will appear instantly in this guild.
-        self.tree.copy_global_to(guild=MY_GUILD)
-        await self.tree.sync(guild=MY_GUILD)
+        try:
+            self.tree.copy_global_to(guild=MY_GUILD)
+            await self.tree.sync(guild=MY_GUILD)
+            logger.info(f"Synced app commands to configured guild {MY_GUILD.id}")
+        except Exception as e:
+            logger.warning(f"Initial guild sync to {MY_GUILD.id} failed: {e}. Will try fallback on_ready sync.")
 
     async def on_disconnect(self):
         """Event that runs when the bot disconnects from Discord."""
@@ -62,6 +67,24 @@ class GameNightBot(commands.Bot):
     async def on_ready(self):
         """Event that runs when the bot has successfully connected to Discord."""
         logger.info(f'Logged in as {self.user} (ID: {self.user.id})')
+
+        # Fallback: fast guild-only sync to the first connected guild if needed
+        # This ensures newly added commands (e.g., /import_gog) appear immediately during testing.
+        try:
+            if not self._did_fallback_sync:
+                guilds = self.guilds
+                if guilds:
+                    fallback_guild = guilds[0]
+                    # Copy global commands to the fallback guild and sync
+                    self.tree.copy_global_to(guild=fallback_guild)
+                    await self.tree.sync(guild=fallback_guild)
+                    self._did_fallback_sync = True
+                    logger.info(f"Fallback guild-only sync complete for guild {fallback_guild.id} ({fallback_guild.name}).")
+                else:
+                    logger.warning("No guilds found to perform fallback sync.")
+        except Exception as e:
+            logger.error(f"Fallback guild-only sync failed: {e}")
+
         logger.info(f'Commands synced to guild {MY_GUILD.id}')
         logger.info('------')
 

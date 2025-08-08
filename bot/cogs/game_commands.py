@@ -296,7 +296,7 @@ class GameCommands(commands.Cog):
     @add_games.autocomplete('platform')
     async def source_autocomplete(self, interaction: discord.Interaction, current: str):
         """Autocomplete for source names."""
-        sources = ["PC", "Steam", "Xbox", "PlayStation", "Switch"]
+        sources = ["PC", "Steam", "Xbox", "PlayStation", "Switch", "GOG"]
         return [app_commands.Choice(name=s, value=s) for s in sources if current.lower() in s.lower()]
 
 
